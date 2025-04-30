@@ -19,3 +19,13 @@
    ```bash
    git clone https://github.com/SergeySavchenka/diplom.git
    cd diplom
+2. Установите зависимости:
+   ```bash
+   pip install -r requirements.txt
+3. Настройте переменные окружения:
+   ```bash
+   cp .env.example .env
+   # отредактируйте .env под свою среду
+4. Запустите приложение
+   ```bash
+   python app.py
