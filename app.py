@@ -16,9 +16,9 @@ if ENV == "auto":
         mysql_available = False
 
     if mysql_available:
-        env_file = ".env.local"
+        env_file = "example_configs/.env.local"
     else:
-        env_file = ".env.work"
+        env_file = "example_configs/.env.work"
 else:
     env_file = f".env.{ENV}"
 
