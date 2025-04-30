@@ -80,6 +80,10 @@ def show_config():
 
 
 if __name__ == '__main__':
+    import os
     with app.app_context():
         db.create_all()
-    app.run()
+    
+    # Получаем PORT из переменных окружения, если нет — используем 5000
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
