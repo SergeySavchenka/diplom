@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}🔖 Управление метками{% endblock %}
+
+{% block content %}
+<h2>🔖 Управление метками</h2>
+
+<p>На этой странице можно добавлять и управлять метками для задач.</p>
+
+<form method="POST" action="/label/add">
+    <div class="input-group mb-3">
+        <input type="text" name="name" class="form-control" placeholder="Название метки" required>
+        <button class="btn btn-primary" type="submit">Добавить</button>
+    </div>
+</form>
+
+<ul class="list-group">
+    {% for label in labels %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="badge bg-primary rounded-pill">●</span>
+            {{ label.name }}
+        </li>
+    {% endfor %}
+</ul>
+
+<a href="/board" class="btn btn-secondary mt-3">← На доску</a>
+{% endblock %}

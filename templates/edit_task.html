@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Редактировать "{{ task.title }}"{% endblock %}
+
+{% block content %}
+<h2>🛠 Редактирование задачи</h2>
+
+<form method="POST">
+    <div class="mb-3">
+        <label for="title" class="form-label">Название задачи</label>
+        <input type="text" name="title" id="title" class="form-control" value="{{ task.title }}" required>
+    </div>
+    <div class="mb-3">
+        <label for="description" class="form-label">Описание</label>
+        <textarea name="description" id="description" class="form-control" rows="3">{{ task.description }}</textarea>
+    </div>
+    <div class="mb-3">
+        <label for="status_id" class="form-label">Статус</label>
+        <select name="status_id" id="status_id" class="form-select" required>
+            {% for status in statuses %}
+                <option value="{{ status.id }}" {% if status.id == task.status_id %}selected{% endif %}>
+                    {{ status.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn btn-success">Сохранить изменения</button>
+</form>
+
+<a href="/task/{{ task.id }}" class="btn btn-secondary mt-3">Назад к задаче</a>
+{% endblock %}
