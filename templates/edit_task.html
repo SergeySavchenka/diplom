@@ -1,29 +1,169 @@
 {% extends "base.html" %}
-{% block title %}Редактировать метку "{{ label.name }}"{% endblock %}
+
+{% block title %}Редактировать: {{ task.title }}{% endblock %}
+
 {% block content %}
-<h2>🛠 Редактировать метку</h2>
-
-<form method="POST">
-    <div class="mb-3">
-        <label class="form-label">Название</label>
-        <input type="text" name="name" class="form-control" value="{{ label.name }}" required>
-    </div>
-    <div class="mb-3">
-        <label class="form-label">Описание</label>
-        <textarea name="description" class="form-control">{{ label.description }}</textarea>
-    </div>
-    <div class="mb-3">
-        <label class="form-label">Цвет</label>
-        <input type="color" name="color" class="form-control form-control-color" value="{{ label.color }}">
+<div class="container-fluid">
+    <!-- Верхняя панель -->
+    <div class="d-flex justify-content-between align-items-center mb-3 bg-light p-3 rounded shadow-sm">
+        <h1 class="h4 mb-0">Редактировать "{{ task.title }}"</h1>
+        <a href="{{ url_for('task_details', task_id=task.id) }}" class="btn btn-sm btn-outline-secondary">Назад к задаче</a>
     </div>
 
-    <button type="submit" class="btn btn-success">Сохранить изменения</button>
-</form>
+    <!-- Форма редактирования -->
+    <form method="POST" action="{{ url_for('edit_task', task_id=task.id) }}">
+        <!-- Основная информация -->
+        <div class="row">
+            <div class="col-md-9">
+                <!-- Название задачи -->
+                <div class="mb-3">
+                    <label for="title" class="form-label">Заголовок задачи</label>
+                    <input type="text" name="title" id="title" class="form-control" value="{{ task.title }}" required>
+                </div>
 
-<!-- Кнопка удаления -->
-<form action="{{ url_for('delete_label', label_id=label.id) }}" method="POST" onsubmit="return confirm('Вы уверены, что хотите удалить эту метку?');">
-    <button type="submit" class="btn btn-danger mt-3">❌ Удалить метку</button>
-</form>
+                <!-- Статус -->
 
-<a href="/labels" class="btn btn-secondary mt-3">← Назад к списку</a>
+                <div class="mb-3">
+                    <label for="status_id" class="form-label">Статус</label>
+                    <select name="status_id" id="status_id" class="form-select" required>
+                        {% for status in statuses %}
+                            <option value="{{ status.id }}" {% if status.id == task.status_id %}selected{% endif %}>
+                                {{ status.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+
+                <!-- Описание -->
+                <div class="mb-3">
+                    <label for="description" class="form-label">Описание</label>
+                    <textarea name="description" id="description" rows="5" class="form-control">{{ task.description }}</textarea>
+                </div>
+
+                <!-- Связанные задачи (пример, можно сделать через Select2 или мультиселект) -->
+                <div class="mb-3">
+                    <label for="related_tasks" class="form-label">Связанные задачи</label>
+                    <select name="related_tasks" id="related_tasks" class="form-select" multiple>
+                        {% for t in all_tasks %}
+                            <option value="{{ t.id }}" {% if t in task.related_tasks %}selected{% endif %}>
+                                #{{ t.id }} - {{ t.title }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Правый сайдбар -->
+            <div class="col-md-3">
+                <aside class="right-sidebar border-start ps-3 pe-3 pt-2 pb-2">
+
+                    <!-- Назначенный пользователь -->
+                    <div class="card mb-3 border-0">
+                        <div class="card-body p-3">
+                            <h6 class="fw-bold"><i class="bi bi-person-fill me-2"></i>Назначенный</h6>
+                            <select name="assignee" class="form-select form-select-sm">
+                                <option value="">Не назначен</option>
+                                {% for user in users %}
+                                    <option value="{{ user.id }}" {% if user.id == task.assignee_id %}selected{% endif %}>
+                                        {{ user.full_name or user.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Метки -->
+                    <div class="card mb-3 border-0">
+                        <div class="card-body p-3">
+                            <h6 class="fw-bold"><i class="bi bi-tags-fill me-2"></i>Метки</h6>
+                            <select name="labels" class="form-select form-select-sm" multiple>
+                                {% for label in all_labels %}
+                                    <option value="{{ label.id }}"
+                                            style="background-color: {{ label.color }}; color: white;"
+                                            {% if label in task.labels %}selected{% endif %}>
+                                        {{ label.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Вес -->
+                    <div class="card mb-3 border-0">
+                        <div class="card-body p-3">
+                            <h6 class="fw-bold"><i class="bi bi-hash me-2"></i>Вес</h6>
+                            <input type="number" name="weight" class="form-control form-control-sm" min="0"
+                                   value="{{ task.weight if task.weight else '' }}">
+                        </div>
+                    </div>
+
+                    <!-- Дата выполнения -->
+                    <div class="card mb-3 border-0">
+                        <div class="card-body p-3">
+                            <h6 class="fw-bold"><i class="bi bi-calendar-event me-2"></i>Дата выполнения</h6>
+                            <input type="date" name="due_date" class="form-control form-control-sm"
+                                   value="{{ task.due_date.strftime('%Y-%m-%d') if task.due_date else '' }}">
+                        </div>
+                    </div>
+
+                    <!-- Конфиденциальность -->
+                    <div class="card mb-3 border-0">
+                        <div class="card-body p-3">
+                            <h6 class="fw-bold"><i class="bi bi-shield-lock me-2"></i>Конфиденциальность</h6>
+                            <select name="confidentiality" class="form-select form-select-sm">
+                                <option value="">Общедоступно</option>
+                                <option value="private" {% if task.confidentiality == 'private' %}selected{% endif %}>Приватно</option>
+                                <option value="internal" {% if task.confidentiality == 'internal' %}selected{% endif %}>Внутреннее</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Участники -->
+                    <div class="card mb-3 border-0">
+                        <div class="card-body p-3">
+                            <h6 class="fw-bold"><i class="bi bi-people me-2"></i>Участники</h6>
+                            <select name="participants" class="form-select form-select-sm" multiple>
+                                {% for user in users %}
+                                    <option value="{{ user.id }}" {% if user in task.participants %}selected{% endif %}>
+                                        {{ user.full_name or user.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Кнопка сохранить -->
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary w-100">Сохранить изменения</button>
+                    </div>
+
+                </aside>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Подключение Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+<style>
+.right-sidebar {
+    position: sticky;
+    top: 80px;
+    background-color: #f9f9f9;
+    border-left: 1px solid #ddd;
+    border-radius: 0 8px 8px 0;
+}
+
+.card.border-0 {
+    background-color: #fff;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.card-body {
+    padding: 1rem;
+}
+</style>
+
 {% endblock %}
