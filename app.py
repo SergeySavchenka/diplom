@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, render_template_string
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
+from datetime import datetime, date
 import os
 
 # --- Загрузка переменных окружения ---
@@ -10,6 +11,7 @@ ENV = os.getenv("FLASK_ENV", "auto")
 if ENV == "auto":
     try:
         import pymysql
+
         mysql_available = True
     except ImportError:
         mysql_available = False
@@ -33,12 +35,25 @@ app.debug = os.getenv('DEBUG', 'False').lower() in ['true', '1']
 
 db = SQLAlchemy(app)
 
+
 # --- Модели ---
+
 
 class Status(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
 
+
+# Таблица связи многие-ко-многим
+task_label = db.Table('task_label',
+                      db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
+                      db.Column('label_id', db.Integer, db.ForeignKey('label.id'), primary_key=True)
+                      )
+
+task_link = db.Table('task_link',
+    db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
+    db.Column('linked_task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True)
+)
 
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -46,7 +61,40 @@ class Task(db.Model):
     description = db.Column(db.Text, nullable=True)
     status_id = db.Column(db.Integer, db.ForeignKey('status.id'), nullable=False)
     status = db.relationship('Status', backref='tasks')
-    task_order = db.Column(db.Integer, default=0)  # Новое поле
+    task_order = db.Column(db.Integer, default=0)
+    labels = db.relationship('Label', secondary=task_label, backref='tasks')
+
+    # Новые поля
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    weight = db.Column(db.Integer)
+    due_date = db.Column(db.Date)
+    confidentiality = db.Column(db.String(50))
+
+    activities = db.relationship('Activity', backref='task', lazy='dynamic')
+
+    # Связанные задачи (many-to-many)
+    linked_tasks = db.relationship(
+        'Task',
+        secondary=task_link,
+        primaryjoin=(task_link.c.task_id == id),
+        secondaryjoin=(task_link.c.linked_task_id == id),
+        backref='tasks'
+    )
+
+
+class Label(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    color = db.Column(db.String(20), default="#888888")  # Цвет метки
+
+
+class Activity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 # --- Роуты ---
@@ -79,14 +127,10 @@ def wiki():
     return render_template('wiki.html')
 
 
-@app.route('/labels')
-def labels():
-    return render_template('labels.html')
-
-
 @app.route('/task/add', methods=['GET', 'POST'])
 def add_task():
     statuses = Status.query.all()
+    labels = Label.query.all()
     if not statuses:
         return redirect(url_for('board'))
 
@@ -96,34 +140,46 @@ def add_task():
         status_id = request.form.get('status_id')
 
         new_task = Task(title=title, description=description, status_id=status_id)
+
+        # Привязываем метки
+        label_ids = request.form.getlist('label_ids')
+        if label_ids:
+            selected_labels = Label.query.filter(Label.id.in_(label_ids)).all()
+            new_task.labels.extend(selected_labels)
+
         db.session.add(new_task)
         db.session.commit()
+
         return redirect(url_for('board'))
 
-    return render_template('add_task.html', statuses=statuses)
+    return render_template('add_task.html', statuses=statuses, all_labels=Label.query.all())
 
 
 @app.route('/task/<int:task_id>')
 def task_details(task_id):
     task = Task.query.get_or_404(task_id)
-    statuses = Status.query.all()
-    return render_template('task_details.html', task=task, statuses=statuses)
+    return render_template('task_details.html', task=task)
 
 
 @app.route('/task/<int:task_id>/edit', methods=['GET', 'POST'])
 def edit_task(task_id):
     task = Task.query.get_or_404(task_id)
     statuses = Status.query.all()
+    labels = Label.query.all()
 
     if request.method == 'POST':
         task.title = request.form.get('title')
         task.description = request.form.get('description')
         task.status_id = request.form.get('status_id')
 
+        # Обновляем метки
+        label_ids = request.form.getlist('label_ids')
+        task.labels = Label.query.filter(Label.id.in_(label_ids)).all()
+
         db.session.commit()
         return redirect(url_for('task_details', task_id=task.id))
 
-    return render_template('edit_task.html', task=task, statuses=statuses)
+    return render_template('edit_task.html', task=task, statuses=statuses, all_labels=labels)
 
 
 @app.route('/api/update/<int:task_id>/<int:status_id>')
@@ -180,6 +236,48 @@ def add_status():
         return redirect(url_for('board'))
 
     return render_template('add_status.html')
+
+
+@app.route('/labels')
+def list_labels():
+    labels = Label.query.all()
+    return render_template('labels.html', labels=labels)
+
+
+@app.route('/label/add', methods=['POST'])
+def add_label():
+    name = request.form.get('name')
+    description = request.form.get('description')
+    color = request.form.get('color', '#888888')
+
+    if name and not Label.query.filter_by(name=name).first():
+        new_label = Label(name=name, description=description, color=color)
+        db.session.add(new_label)
+        db.session.commit()
+
+    return redirect(url_for('list_labels'))
+
+
+@app.route('/label/<int:label_id>/edit', methods=['GET', 'POST'])
+def edit_label(label_id):
+    label = Label.query.get_or_404(label_id)
+
+    if request.method == 'POST':
+        label.name = request.form.get('name')
+        label.description = request.form.get('description')
+        label.color = request.form.get('color', label.color)
+        db.session.commit()
+        return redirect(url_for('list_labels'))
+
+    return render_template('edit_label.html', label=label)
+
+
+@app.route('/label/<int:label_id>/delete', methods=['POST'])
+def delete_label(label_id):
+    label = Label.query.get_or_404(label_id)
+    db.session.delete(label)
+    db.session.commit()
+    return redirect(url_for('list_labels'))
 
 
 # --- Запуск приложения ---
