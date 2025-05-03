@@ -22,6 +22,17 @@
             {% endfor %}
         </select>
     </div>
+
+    <!-- Метки -->
+    <div class="mb-3">
+        <label for="label_ids" class="form-label">Метки</label>
+        <select name="label_ids" id="label_ids" class="form-select" multiple>
+            {% for label in all_labels %}
+                <option value="{{ label.id }}">{{ label.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
     <button type="submit" class="btn btn-success">Добавить задачу</button>
 </form>
 
