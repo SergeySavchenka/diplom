@@ -5,23 +5,29 @@
 {% block content %}
 <h2>🔖 Управление метками</h2>
 
-<p>На этой странице можно добавлять и управлять метками для задач.</p>
-
+<!-- Форма добавления -->
 <form method="POST" action="/label/add">
     <div class="input-group mb-3">
         <input type="text" name="name" class="form-control" placeholder="Название метки" required>
+        <input type="color" name="color" value="#888888" class="form-control form-control-color" title="Выберите цвет">
         <button class="btn btn-primary" type="submit">Добавить</button>
     </div>
 </form>
 
-<ul class="list-group">
+<!-- Список меток -->
+<div class="row">
     {% for label in labels %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span class="badge bg-primary rounded-pill">●</span>
-            {{ label.name }}
-        </li>
+        <div class="col-md-4 mb-3">
+            <div class="card border-{{ loop.index }}" style="border-left: 5px solid {{ label.color }};">
+                <div class="card-body">
+                    <h5 class="card-title">{{ label.name }}</h5>
+                    <p class="card-text text-muted small">{{ label.description or "Нет описания" }}</p>
+                    <a href="{{ url_for('edit_label', label_id=label.id) }}" class="btn btn-sm btn-outline-primary">✏️ Редактировать</a>
+                </div>
+            </div>
+        </div>
     {% endfor %}
-</ul>
+</div>
 
 <a href="/board" class="btn btn-secondary mt-3">← На доску</a>
 {% endblock %}
