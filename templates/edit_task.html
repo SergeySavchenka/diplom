@@ -1,31 +1,29 @@
 {% extends "base.html" %}
-
-{% block title %}Редактировать "{{ task.title }}"{% endblock %}
-
+{% block title %}Редактировать метку "{{ label.name }}"{% endblock %}
 {% block content %}
-<h2>🛠 Редактирование задачи</h2>
+<h2>🛠 Редактировать метку</h2>
 
 <form method="POST">
     <div class="mb-3">
-        <label for="title" class="form-label">Название задачи</label>
-        <input type="text" name="title" id="title" class="form-control" value="{{ task.title }}" required>
+        <label class="form-label">Название</label>
+        <input type="text" name="name" class="form-control" value="{{ label.name }}" required>
     </div>
     <div class="mb-3">
-        <label for="description" class="form-label">Описание</label>
-        <textarea name="description" id="description" class="form-control" rows="3">{{ task.description }}</textarea>
+        <label class="form-label">Описание</label>
+        <textarea name="description" class="form-control">{{ label.description }}</textarea>
     </div>
     <div class="mb-3">
-        <label for="status_id" class="form-label">Статус</label>
-        <select name="status_id" id="status_id" class="form-select" required>
-            {% for status in statuses %}
-                <option value="{{ status.id }}" {% if status.id == task.status_id %}selected{% endif %}>
-                    {{ status.name }}
-                </option>
-            {% endfor %}
-        </select>
+        <label class="form-label">Цвет</label>
+        <input type="color" name="color" class="form-control form-control-color" value="{{ label.color }}">
     </div>
+
     <button type="submit" class="btn btn-success">Сохранить изменения</button>
 </form>
 
-<a href="/task/{{ task.id }}" class="btn btn-secondary mt-3">Назад к задаче</a>
+<!-- Кнопка удаления -->
+<form action="{{ url_for('delete_label', label_id=label.id) }}" method="POST" onsubmit="return confirm('Вы уверены, что хотите удалить эту метку?');">
+    <button type="submit" class="btn btn-danger mt-3">❌ Удалить метку</button>
+</form>
+
+<a href="/labels" class="btn btn-secondary mt-3">← Назад к списку</a>
 {% endblock %}
