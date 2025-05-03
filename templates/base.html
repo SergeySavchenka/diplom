@@ -1,93 +1,296 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>{% block title %}Diplom - Канбан{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        /* Запрещаем общий скролл страницы */
-        html, body {
-            overflow: hidden;
-            height: 100%;
-            margin: 0;
-        }
+{% extends "base.html" %}
 
-        body {
-            display: flex;
-            min-height: 100vh;
-        }
+{% block title %}Доска задач{% endblock %}
 
-        .sidebar {
-            width: 240px;
-            background-color: #f8f9fa;
-            height: 100vh;
-            position: fixed;
-            left: 0;
-            top: 0;
-            padding: 20px;
-            border-right: 1px solid #ccc;
-        }
+{% block content %}
+<h1>Модуль тестирования задач проекта</h1>
 
-        .sidebar ul {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .sidebar li {
-            margin-bottom: 10px;
-        }
-
-        .sidebar a {
-            text-decoration: none;
-            color: #333;
-            font-weight: bold;
-        }
-
-        .sidebar a:hover {
-            text-decoration: underline;
-        }
-
-        .content {
-            margin-left: 260px;
-            width: 100%;
-            padding: 20px;
-        }
-    </style>
-
-    <!-- Общий JS для клика по названию задачи -->
-    <script>
-        function openTask(taskId) {
-            window.location.href = '/task/' + taskId;
-        }
-
-        window.onload = function () {
-            const titles = document.querySelectorAll('.task-title');
-            titles.forEach(title => {
-                title.addEventListener('click', function (e) {
-                    const taskId = this.getAttribute('data-task-id');
-                    openTask(taskId);
-                });
-            });
-        };
-    </script>
-</head>
-<body>
-
-<!-- Sidebar -->
-<div class="sidebar">
-    <ul>
-        <li><a href="/tasks">🧩 Список задач</a></li>
-        <li><a href="/board">📋 Доска</a></li>
-        <li><a href="/wiki">📘 Вики</a></li>
-        <li><a href="/labels">🔖 Метки</a></li>
-    </ul>
+<!-- Кнопки действий -->
+<div class="mb-3">
+    <a href="/task/add" class="btn btn-success me-2">+ Новая задача</a>
+    <a href="/status/add" class="btn btn-outline-secondary">+ Статус</a>
 </div>
 
-<!-- Main Content -->
-<div class="content">
-    {% block content %}
-    {% endblock %}
+<!-- Обёртка для горизонтальной прокрутки -->
+<div class="board-scroll-wrapper">
+    <!-- Контейнер с колонками -->
+    <div class="board-container">
+        {% for status in statuses %}
+            <div class="column-wrapper"
+                 ondragover="highlightDropZone(event)"
+                 ondrop="drop(event, {{ status.id }})">
+                <div class="card border-dark mb-0">
+                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                        <span>{{ status.name }}</span>
+                        <span class="badge bg-secondary" id="count-{{ status.id }}">{{ task_counts.get(status.id, 0) }}</span>
+                    </div>
+                    <div class="card-body column" id="column-{{ status.id }}" data-status-id="{{ status.id }}">
+                        {% for task in tasks if task.status_id == status.id %}
+                            <div class="card mb-2"
+                                 id="{{ task.id }}"
+                                 draggable="true"
+                                 ondragstart="drag(event)"
+                                 style="cursor: grab;">
+                                <div class="card-body p-2">
+                                    <strong class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</strong>
+
+                                    <!-- Отображение меток -->
+                                    <div class="mt-1">
+                                        {% for label in task.labels %}
+                                            <span class="badge rounded-pill me-1" style="background-color: {{ label.color }}; color: white;">
+                                                {{ label.name }}
+                                            </span>
+                                        {% endfor %}
+                                    </div>
+
+
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
 </div>
 
-</body>
-</html>
+<script>
+let dropZone = null;
+let currentTargetColumn = null;
+let currentTargetRef = null;
+
+function allowDrop(event) {
+    event.preventDefault();
+}
+
+function drag(event) {
+    const card = event.target.closest('.card');
+    event.dataTransfer.setData("text/plain", card.id);
+    event.dataTransfer.setData("from-column", card.parentElement.id);
+
+    // Создаем индикатор позиции дропа
+    if (!dropZone) {
+        dropZone = document.createElement('div');
+        dropZone.className = 'drop-zone';
+        document.body.appendChild(dropZone);
+    }
+}
+
+function highlightDropZone(event) {
+    event.preventDefault();
+
+    const column = event.currentTarget.querySelector('.column');
+    if (!column) return;
+
+    const rect = column.getBoundingClientRect();
+    const dropY = event.clientY;
+
+    const children = Array.from(column.children);
+    let targetIndex = children.length;
+    let refElement = null;
+
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        const box = child.getBoundingClientRect();
+        const offset = dropY - box.top - box.height / 2;
+        if (offset < 0) {
+            targetIndex = i;
+            refElement = child;
+            break;
+        }
+    }
+
+    moveDropZone(column, refElement);
+    currentTargetColumn = column;
+    currentTargetRef = refElement;
+}
+
+function moveDropZone(targetElement, refElement) {
+    if (!dropZone) return;
+
+    const rect = targetElement.getBoundingClientRect();
+
+    dropZone.style.position = 'absolute';
+    dropZone.style.left = `${rect.left}px`;
+    dropZone.style.width = `${rect.width}px`;
+
+    if (refElement) {
+        const refRect = refElement.getBoundingClientRect();
+        dropZone.style.top = `${refRect.top - window.scrollY}px`;
+    } else {
+        const lastChild = targetElement.lastElementChild;
+        if (lastChild) {
+            const lastRect = lastChild.getBoundingClientRect();
+            dropZone.style.top = `${lastRect.bottom - window.scrollY}px`;
+        } else {
+            dropZone.style.top = `${rect.top}px`;
+        }
+    }
+
+    dropZone.classList.add('drop-zone-over');
+    dropZone.style.display = 'block';
+}
+
+function clearDropZone() {
+    if (dropZone) {
+        dropZone.classList.remove('drop-zone-over');
+        dropZone.style.display = 'none';
+    }
+    currentTargetColumn = null;
+    currentTargetRef = null;
+}
+
+function drop(event, targetStatusId) {
+    event.preventDefault();
+    clearDropZone();
+
+    const taskId = event.dataTransfer.getData("text/plain");
+    const fromColumnId = event.dataTransfer.getData("from-column");
+    const taskElement = document.getElementById(taskId);
+
+    const column = document.getElementById("column-" + targetStatusId);
+    if (!column) return;
+
+    // Получаем координату Y курсора
+    const dropY = event.clientY;
+
+    // Ищем ближайший элемент под курсором
+    const children = Array.from(column.children);
+    const closest = children.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = dropY - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY, element: null });
+
+    // Если перенос внутри той же колонки — перемещаем элемент
+    if (fromColumnId === column.id) {
+        if (closest.element) {
+            column.insertBefore(taskElement, closest.element);
+        } else {
+            column.appendChild(taskElement);
+        }
+
+        updateOrderInColumn(column);
+        updateCounters();
+        return;
+    }
+
+    // Если это перенос из другой колонки
+    fetch(`/api/update/${taskId}/${targetStatusId}`, {
+        method: 'GET'
+    })
+    .then(response => response.text())
+    .then(html => {
+        taskElement.remove();
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newTask = doc.body.firstChild;
+
+        if (closest.element) {
+            column.insertBefore(newTask, closest.element);
+        } else {
+            column.appendChild(newTask);
+        }
+
+        updateOrderInColumn(column);
+        updateCounters();
+    })
+    .catch(err => console.error("Ошибка:", err));
+}
+
+function updateOrderInColumn(column) {
+    const tasks = column.querySelectorAll('.card');
+    const orderData = Array.from(tasks).map((task, index) => ({
+        id: task.id,
+        order: index
+    }));
+
+    fetch('/api/order', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ tasks: orderData })
+    });
+}
+
+function updateCounters() {
+    const columns = document.querySelectorAll('.column');
+    columns.forEach(column => {
+        const statusId = column.getAttribute('data-status-id');
+        const countSpan = document.querySelector(`#count-${statusId}`);
+        if (countSpan) {
+            countSpan.textContent = column.children.length;
+        }
+    });
+}
+</script>
+
+<style>
+.board-scroll-wrapper {
+    overflow-x: auto;
+    padding-bottom: 20px;
+    height: calc(100vh - 160px);
+    margin-right: 250px;
+}
+
+.board-container {
+    display: flex;
+    gap: 20px;
+    min-width: max-content;
+}
+
+.column-wrapper {
+    width: 384px;
+}
+
+.column {
+    min-height: 700px;
+    max-height: 700px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    background-color: #f9f9f9;
+    padding: 10px;
+    position: relative;
+}
+
+.card {
+    cursor: grab;
+    margin-bottom: 10px;
+}
+
+.task-title {
+    text-decoration: none;
+    color: inherit;
+}
+
+.task-title:hover {
+    text-decoration: underline;
+}
+
+/* Индикатор дропа */
+.drop-zone {
+    position: absolute;
+    border-top: 2px dashed #0d6efd;
+    height: 4px;
+    background-color: #0d6efd;
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+}
+
+/* Активная зона дропа */
+.drop-zone-over {
+    border-top: 3px dashed #0d6efd !important;
+    height: 6px !important;
+    opacity: 0.8 !important;
+}
+</style>
+
+{% endblock %}
