@@ -198,15 +198,21 @@ def api_update_status(task_id, status_id):
 
     template = """
     <div class="card mb-2"
-         id="{{ task.id }}"
-         draggable="true"
-         ondragstart="drag(event)"
-         style="cursor: grab;">
+        id="{{ task.id }}"
+        draggable="true"
+        ondragstart="drag(event)"
+        style="cursor: grab;">
         <div class="card-body p-2">
-            <strong>{{ task.title }}</strong>
-            {% if task.description %}
-                <p class="text-muted small">{{ task.description }}</p>
-            {% endif %}
+           <strong class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</strong>
+           
+           <!-- Отображение меток -->
+           <div class="mt-1">
+               {% for label in task.labels %}
+                   <span class="badge rounded-pill me-1" style="background-color: {{ label.color }}; color: black;">
+                       {{ label.name }}
+                   </span>
+               {% endfor %}
+           
         </div>
     </div>
     """
