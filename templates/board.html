@@ -37,12 +37,11 @@
                                     <!-- Отображение меток -->
                                     <div class="mt-1">
                                         {% for label in task.labels %}
-                                            <span class="badge rounded-pill me-1" style="background-color: {{ label.color }}; color: white;">
+                                            <span class="badge rounded-pill me-1" style="background-color: {{ label.color }}; color: black;">
                                                 {{ label.name }}
                                             </span>
                                         {% endfor %}
                                     </div>
-
 
                                 </div>
                             </div>
