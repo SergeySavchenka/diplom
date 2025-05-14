@@ -26,13 +26,15 @@
                     </div>
                     <div class="card-body column" id="column-{{ status.id }}" data-status-id="{{ status.id }}">
                         {% for task in tasks if task.status_id == status.id %}
-                            <div class="card mb-2"
+                            <div class="card mb-2 task-card"
                                  id="{{ task.id }}"
                                  draggable="true"
                                  ondragstart="drag(event)"
                                  style="cursor: grab;">
                                 <div class="card-body p-2">
-                                    <strong class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</strong>
+                                    <a href="/task/{{ task.id }}" class="task-title" data-task-id="{{ task.id }}">
+                                        <strong>{{ task.title }}</strong>
+                                    </a>
 
                                     <!-- Отображение меток -->
                                     <div class="mt-1">
@@ -42,7 +44,6 @@
                                             </span>
                                         {% endfor %}
                                     </div>
-
                                 </div>
                             </div>
                         {% endfor %}
@@ -58,14 +59,13 @@ let dropZone = null;
 let currentTargetColumn = null;
 let currentTargetRef = null;
 
-function allowDrop(event) {
-    event.preventDefault();
-}
-
 function drag(event) {
-    const card = event.target.closest('.card');
-    event.dataTransfer.setData("text/plain", card.id);
-    event.dataTransfer.setData("from-column", card.parentElement.id);
+    const card = event.target.closest('.task-card');
+    const data = {
+        id: card.id,
+        fromColumn: card.parentElement.id
+    };
+    event.dataTransfer.setData("application/json", JSON.stringify(data));
 
     // Создаем индикатор позиции дропа
     if (!dropZone) {
@@ -143,17 +143,15 @@ function drop(event, targetStatusId) {
     event.preventDefault();
     clearDropZone();
 
-    const taskId = event.dataTransfer.getData("text/plain");
-    const fromColumnId = event.dataTransfer.getData("from-column");
+    const data = JSON.parse(event.dataTransfer.getData("application/json"));
+    const taskId = data.id;
+    const fromColumnId = data.fromColumn;
     const taskElement = document.getElementById(taskId);
 
     const column = document.getElementById("column-" + targetStatusId);
     if (!column) return;
 
-    // Получаем координату Y курсора
     const dropY = event.clientY;
-
-    // Ищем ближайший элемент под курсором
     const children = Array.from(column.children);
     const closest = children.reduce((closest, child) => {
         const box = child.getBoundingClientRect();
@@ -165,45 +163,69 @@ function drop(event, targetStatusId) {
         }
     }, { offset: Number.NEGATIVE_INFINITY, element: null });
 
-    // Если перенос внутри той же колонки — перемещаем элемент
     if (fromColumnId === column.id) {
         if (closest.element) {
             column.insertBefore(taskElement, closest.element);
         } else {
             column.appendChild(taskElement);
         }
-
         updateOrderInColumn(column);
         updateCounters();
         return;
     }
 
-    // Если это перенос из другой колонки
-    fetch(`/api/update/${taskId}/${targetStatusId}`, {
-        method: 'GET'
+    fetch(`/api/tasks/${taskId}/status`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status_id: targetStatusId })
     })
-    .then(response => response.text())
-    .then(html => {
+    .then(response => response.json())
+    .then(taskData => {
         taskElement.remove();
-
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const newTask = doc.body.firstChild;
-
+        const newTask = createTaskCard(taskData);
         if (closest.element) {
             column.insertBefore(newTask, closest.element);
         } else {
             column.appendChild(newTask);
         }
-
         updateOrderInColumn(column);
         updateCounters();
     })
-    .catch(err => console.error("Ошибка:", err));
+    .catch(err => {
+        console.error("Ошибка:", err);
+        alert("Не удалось переместить задачу.");
+    });
+}
+
+function createTaskCard(task) {
+    const div = document.createElement('div');
+    div.className = 'card mb-2 task-card';
+    div.id = task.id;
+    div.draggable = true;
+    div.setAttribute('ondragstart', 'drag(event)');
+    div.style.cursor = 'grab';
+
+    div.innerHTML = `
+        <div class="card-body p-2">
+            <a href="/task/${task.id}" class="task-title" data-task-id="${task.id}">
+                <strong>${task.title}</strong>
+            </a>
+            <div class="mt-1">
+                ${task.labels.map(label => `
+                    <span class="badge rounded-pill me-1" style="background-color:${label.color};color:black;">
+                        ${label.name}
+                    </span>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    return div;
 }
 
 function updateOrderInColumn(column) {
-    const tasks = column.querySelectorAll('.card');
+    const tasks = column.querySelectorAll('.task-card');
     const orderData = Array.from(tasks).map((task, index) => ({
         id: task.id,
         order: index
@@ -258,18 +280,19 @@ function updateCounters() {
     position: relative;
 }
 
-.card {
+.task-card {
     cursor: grab;
     margin-bottom: 10px;
 }
 
 .task-title {
+    color: inherit;
     text-decoration: none;
     color: inherit;
 }
 
 .task-title:hover {
-    text-decoration: underline;
+    text-decoration: underline !important;
 }
 
 /* Индикатор дропа */
