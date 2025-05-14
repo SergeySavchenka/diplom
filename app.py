@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, render_template_string
+from flask import Flask, render_template, request, redirect, url_for, render_template_string, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 from datetime import datetime, date
@@ -51,9 +51,10 @@ task_label = db.Table('task_label',
                       )
 
 task_link = db.Table('task_link',
-    db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
-    db.Column('linked_task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True)
-)
+                     db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
+                     db.Column('linked_task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True)
+                     )
+
 
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -64,7 +65,6 @@ class Task(db.Model):
     task_order = db.Column(db.Integer, default=0)
     labels = db.relationship('Label', secondary=task_label, backref='tasks')
 
-    # Новые поля
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     weight = db.Column(db.Integer)
@@ -172,7 +172,6 @@ def edit_task(task_id):
         task.description = request.form.get('description')
         task.status_id = request.form.get('status_id')
 
-        # Обновляем метки
         label_ids = request.form.getlist('label_ids')
         task.labels = Label.query.filter(Label.id.in_(label_ids)).all()
 
@@ -182,43 +181,29 @@ def edit_task(task_id):
     return render_template('edit_task.html', task=task, statuses=statuses, all_labels=labels)
 
 
-@app.route('/api/update/<int:task_id>/<int:status_id>')
-def api_update_status(task_id, status_id):
+@app.route('/api/tasks/<int:task_id>/status', methods=['PUT'])
+def api_update_status(task_id):
+    data = request.get_json()
+    status_id = data.get('status_id')
+
     task = Task.query.get_or_404(task_id)
     target_status = Status.query.get_or_404(status_id)
 
     task.status_id = target_status.id
     db.session.commit()
 
-    # Обновляем порядок у всех задач в старом статусе
-    old_tasks = Task.query.filter(Task.status_id == target_status.id).order_by(Task.task_order.asc()).all()
-    for i, t in enumerate(old_tasks):
+    new_tasks = Task.query.filter_by(status_id=status_id).order_by(Task.task_order.asc()).all()
+    for i, t in enumerate(new_tasks):
         t.task_order = i
     db.session.commit()
 
-    template = """
-    <div class="card mb-2"
-        id="{{ task.id }}"
-        draggable="true"
-        ondragstart="drag(event)"
-        style="cursor: grab;">
-        <div class="card-body p-2">
-           <strong class="task-title" data-task-id="{{ task.id }}">{{ task.title }}</strong>
-           
-           <!-- Отображение меток -->
-           <div class="mt-1">
-               {% for label in task.labels %}
-                   <span class="badge rounded-pill me-1" style="background-color: {{ label.color }}; color: black;">
-                       {{ label.name }}
-                   </span>
-               {% endfor %}
-           
-        </div>
-    </div>
-    """
+    task_data = {
+        'id': task.id,
+        'title': task.title,
+        'labels': [{'name': lb.name, 'color': lb.color} for lb in task.labels]
+    }
 
-    html = render_template_string(template, task=task)
-    return html
+    return jsonify(task_data)
 
 
 @app.route('/api/order', methods=['POST'])
