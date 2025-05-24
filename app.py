@@ -1,106 +1,31 @@
-from flask import Flask, render_template, request, redirect, url_for, render_template_string, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_file
 from dotenv import load_dotenv
-from datetime import datetime, date
 import os
+from markupsafe import Markup
+import markdown
+from werkzeug.utils import secure_filename
+import io
 
-# --- Загрузка переменных окружения ---
-load_dotenv()
+from models import db, Task, Label, Status, Comment, Attachment, task_link, log_task_activity
 
-ENV = os.getenv("FLASK_ENV", "auto")
-if ENV == "auto":
-    try:
-        import pymysql
-        mysql_available = True
-    except ImportError:
-        mysql_available = False
+load_dotenv(dotenv_path="example_configs/.env.local")
 
-    if mysql_available:
-        env_file = "example_configs/.env.local"
-    else:
-        env_file = "example_configs/.env.work"
-else:
-    env_file = f".env.{ENV}"
-
-load_dotenv(dotenv_path=env_file)
-print(f"Загружен конфиг из: {env_file}")
-
-# --- Настройка приложения ---
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback_key')
 app.debug = os.getenv('DEBUG', 'False').lower() in ['true', '1']
 
-db = SQLAlchemy(app)
+
+db.init_app(app)
 
 
-# --- Модели ---
+@app.template_filter()
+def markdown_filter(text):
+    if not text:
+        return ''
+    return Markup(markdown.markdown(text, extensions=['fenced_code', 'codehilite']))
 
-class Status(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
-    label_id = db.Column(db.Integer, db.ForeignKey('label.id'), nullable=False)
-
-
-# Таблицы связи многие-ко-многим
-task_label = db.Table('task_label',
-                      db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
-                      db.Column('label_id', db.Integer, db.ForeignKey('label.id'), primary_key=True)
-                      )
-
-task_link = db.Table('task_link',
-                     db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
-                     db.Column('linked_task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True)
-                     )
-
-
-class Task(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    status_id = db.Column(db.Integer, db.ForeignKey('status.id'), nullable=False)
-    status = db.relationship('Status', backref='tasks')
-    task_order = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    weight = db.Column(db.Integer)
-    due_date = db.Column(db.Date)
-    confidentiality = db.Column(db.String(50))
-
-    # Связанные метки
-    labels = db.relationship('Label', secondary=task_label, backref='tasks')
-
-    # Связь с активностью
-    activities = db.relationship('Activity', backref='task', lazy='dynamic')
-
-
-class Label(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    color = db.Column(db.String(20), default="#888888")  # Цвет метки
-
-
-class Activity(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=False)
-    action_type = db.Column(db.String(50), nullable=True)  # тип действия: created, status_changed и т.д.
-    description = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-def log_task_activity(task_id, action_type, description):
-    activity = Activity(
-        task_id=task_id,
-        action_type=action_type,
-        description=description
-    )
-    db.session.add(activity)
-    db.session.commit()
-
-
-# --- Роуты ---
 
 @app.route('/')
 def home():
@@ -109,14 +34,12 @@ def home():
 
 @app.route('/board')
 def board():
-    tasks = Task.query.order_by(Task.task_order.asc()).all()
+    task_list = Task.query.order_by(Task.task_order.asc()).all()
     statuses = Status.query.all()
-
     task_counts = {}
     for status in statuses:
         task_counts[status.id] = Task.query.filter_by(status_id=status.id).count()
-
-    return render_template('board.html', tasks=tasks, statuses=statuses, task_counts=task_counts, active_page='board')
+    return render_template('board.html', tasks=task_list, statuses=statuses, task_counts=task_counts, active_page='board')
 
 
 @app.route('/tasks')
@@ -134,39 +57,179 @@ def wiki():
 def add_task():
     statuses = Status.query.all()
     labels = Label.query.all()
+
     if not statuses:
         return redirect(url_for('board'))
 
     if request.method == 'POST':
         title = request.form.get('title')
         description = request.form.get('description')
-        status_id = request.form.get('status_id')
+        status_id = 1
 
-        new_task = Task(title=title, description=description, status_id=status_id)
+        new_task = Task(
+            title=title,
+            description=description,
+            status_id=status_id,
+            weight=None,
+            due_date=None,
+            confidentiality=request.form.get('confidentiality')
+        )
 
-        label_ids = request.form.getlist('label_ids')
+        weight = request.form.get('weight')
+        if weight:
+            new_task.weight = request.form.get('weight')
+
+        due_date_str = request.form.get('due_date')
+        if due_date_str:
+            from datetime import datetime
+            try:
+                new_task.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                flash("Неверный формат даты", "danger")
+                return render_template('add_task.html', statuses=statuses, all_labels=labels)
+
+        label_ids = request.form.getlist('labels')
+        if not label_ids:
+            label_ids = ['13']
         if label_ids:
-            selected_labels = Label.query.filter(Label.id.in_(label_ids)).all()
+            selected_labels = Label.query.filter(Label.id.in_(map(int, label_ids))).all()
             new_task.labels.extend(selected_labels)
+
+        assignee_id = request.form.get('assignee')
+        new_task.assignee_id = int(assignee_id) if assignee_id else None
 
         db.session.add(new_task)
         db.session.commit()
 
-        log_task_activity(
-            new_task.id,
-            'created',
-            f'Задача "{new_task.title}" создана'
-        )
+        log_task_activity(new_task.id, 'Создание', f'Задача "{new_task.title}" создана')
 
         return redirect(url_for('board'))
 
     return render_template('add_task.html', statuses=statuses, all_labels=Label.query.all())
 
 
+@app.route('/task/<int:task_id>/comment', methods=['POST'])
+def add_comment(task_id):
+    content = request.form.get('content')
+    if not content:
+        flash("Комментарий не может быть пустым", "danger")
+        return redirect(url_for('task_details', task_id=task_id))
+
+    new_comment = Comment(
+        content=content,
+        task_id=task_id,
+    )
+    db.session.add(new_comment)
+    db.session.commit()
+
+    flash("Комментарий добавлен", "success")
+    return redirect(url_for('task_details', task_id=task_id))
+
+
 @app.route('/task/<int:task_id>')
 def task_details(task_id):
     task = Task.query.get_or_404(task_id)
-    return render_template('task_details.html', task=task)
+    all_tasks = Task.query.all()
+
+    direct_links = db.session.query(task_link.c.linked_task_id).filter(task_link.c.task_id == task_id).all()
+    reverse_links = db.session.query(task_link.c.task_id).filter(task_link.c.linked_task_id == task_id).all()
+
+    related_ids = set(r[0] for r in direct_links + reverse_links)
+    related_tasks = Task.query.filter(Task.id.in_(related_ids)).all()
+
+    statuses = Status.query.all()
+    return render_template('task_details.html', task=task, related_tasks=related_tasks, all_tasks=all_tasks,
+                           statuses=statuses)
+
+
+@app.route('/task/<int:task_id>/link/add', methods=['POST'])
+def add_task_link(task_id):
+    linked_task_id = request.form.get('linked_task_id')
+    return_to = request.form.get('return_to', 'edit_task')  # <-- Читаем откуда пришли
+
+    if not linked_task_id:
+        flash("Не выбрана задача для связи", "danger")
+        return redirect(url_for(return_to, task_id=task_id))
+
+    linked_task_id = int(linked_task_id)
+
+    if task_id == linked_task_id:
+        flash("Задача не может быть связана с самой собой", "danger")
+        return redirect(url_for(return_to, task_id=task_id))
+
+    existing = db.session.query(task_link).filter(
+        db.or_(
+            db.and_(task_link.c.task_id == task_id, task_link.c.linked_task_id == linked_task_id),
+            db.and_(task_link.c.task_id == linked_task_id, task_link.c.linked_task_id == task_id)
+        )
+    ).first()
+
+    if existing:
+        flash("Такая связь уже существует", "warning")
+        return redirect(url_for(return_to, task_id=task_id))
+
+    db.session.execute(task_link.insert().values(task_id=task_id, linked_task_id=linked_task_id))
+    db.session.execute(task_link.insert().values(task_id=linked_task_id, linked_task_id=task_id))
+    db.session.commit()
+
+    flash("Связь успешно создана", "success")
+    return redirect(url_for(return_to, task_id=task_id))
+
+
+@app.route('/task/<int:task_id>/link/<int:linked_task_id>/delete', methods=['POST'])
+def delete_task_link(task_id, linked_task_id):
+    return_to = request.form.get('return_to', 'task_details')
+
+    db.session.execute(
+        task_link.delete().where(
+            db.or_(
+                db.and_(task_link.c.task_id == task_id, task_link.c.linked_task_id == linked_task_id),
+                db.and_(task_link.c.task_id == linked_task_id, task_link.c.linked_task_id == task_id)
+            )
+        )
+    )
+    db.session.commit()
+
+    flash("Связь удалена", "success")
+    return redirect(url_for(return_to, task_id=task_id))
+
+
+@app.route('/task/<int:task_id>/create_bug', methods=['POST'])
+def create_linked_bug_task(task_id):
+    title = request.form.get('title')
+    description = request.form.get('description')
+    label_ids = ['2', '13']
+    print(label_ids, 'aaa')
+    status_id = [1]
+    print(status_id)
+
+    if not title:
+        flash("Задача должна иметь название", "danger")
+        return redirect(url_for('task_details', task_id=task_id))
+
+    new_task = Task(
+        title=title,
+        description=description,
+        status_id=status_id
+    )
+
+    labels = Label.query.filter(Label.id.in_(label_ids)).all()
+    new_task.labels.extend(labels)
+
+    db.session.add(new_task)
+    db.session.flush()
+
+    db.session.execute(task_link.insert().values(task_id=new_task.id, linked_task_id=task_id))
+    db.session.execute(task_link.insert().values(task_id=task_id, linked_task_id=new_task.id))
+
+    db.session.commit()
+
+    log_task_activity(new_task.id, 'Создание', f'Баг-задача "{new_task.title}" создана')
+    log_task_activity(new_task.id, 'Добавление метки', 'Метка "Bug" добавлена')
+
+    flash("Баг-задача успешно создана и привязана к текущей задаче", "success")
+
+    return redirect(url_for('task_details', task_id=new_task.id))
 
 
 @app.route('/task/<int:task_id>/edit', methods=['GET', 'POST'])
@@ -174,23 +237,26 @@ def edit_task(task_id):
     task = Task.query.get_or_404(task_id)
     statuses = Status.query.all()
     labels = Label.query.all()
+    all_tasks = Task.query.all()
+
+    direct_links = db.session.query(task_link.c.linked_task_id).filter(task_link.c.task_id == task_id).all()
+    reverse_links = db.session.query(task_link.c.task_id).filter(task_link.c.linked_task_id == task_id).all()
+    related_ids = set(r[0] for r in direct_links + reverse_links)
+    related_tasks = Task.query.filter(Task.id.in_(related_ids)).all()
 
     old_title = task.title
     old_description = task.description
-    old_status_name = task.status.name if task.status else '—'
+    old_weight = task.weight
+    old_due_date = task.due_date
 
     if request.method == 'POST':
         new_title = request.form.get('title')
         new_description = request.form.get('description')
-        new_status_id = int(request.form.get('status_id') or task.status_id)
 
-        # Обновляем поля
         task.title = new_title
         task.description = new_description
-        task.status_id = new_status_id
 
-        # Обновляем метки
-        label_ids = list(map(int, request.form.getlist('label_ids')))
+        label_ids = list(map(int, request.form.getlist('labels')))
         old_labels = [lb.name for lb in task.labels]
         new_labels = Label.query.filter(Label.id.in_(label_ids)).all()
         task.labels = new_labels
@@ -198,60 +264,121 @@ def edit_task(task_id):
         added_labels = set(lb.name for lb in new_labels) - set(old_labels)
         removed_labels = set(old_labels) - set(lb.name for lb in new_labels)
 
+        weight_str = request.form.get('weight')
+        task.weight = int(weight_str) if weight_str and weight_str.isdigit() else None
+
+        due_date_str = request.form.get('due_date')
+        if due_date_str:
+            try:
+                from datetime import datetime
+                task.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                flash("Неверный формат даты", "danger")
+        else:
+            task.due_date = None
+
         db.session.commit()
 
-        # Логируем изменения
         if old_title != new_title:
-            log_task_activity(task.id, 'title_updated', f'Название изменено с "{old_title}" на "{new_title}"')
-
+            log_task_activity(task.id, 'Изменение заголовка', f'Название изменено с "{old_title}" на "{new_title}"')
         if old_description != new_description:
-            log_task_activity(task.id, 'description_updated', 'Описание изменено')
-
-        if task.status.name != old_status_name:
-            log_task_activity(task.id, 'status_updated', f'Статус изменён на "{task.status.name}"')
+            log_task_activity(task.id, 'Изменение описание', 'Описание изменено')
+        if old_weight != task.weight:
+            log_task_activity(task.id, 'Изменение веса', f'Вес изменён на "{task.weight}"')
+        if old_due_date != task.due_date:
+            due_date_log = task.due_date.strftime('%d.%m.%Y') if task.due_date else 'Не указана'
+            log_task_activity(task.id, 'Изменение даты', f'Дата выполнения изменена на {due_date_log}')
 
         for label in added_labels:
-            log_task_activity(task.id, 'label_added', f'Метка "{label}" добавлена')
-
+            log_task_activity(task.id, 'Добавление метки', f'Метка "{label}" добавлена')
         for label in removed_labels:
-            log_task_activity(task.id, 'label_removed', f'Метка "{label}" удалена')
+            log_task_activity(task.id, 'Удаление метки', f'Метка "{label}" удалена')
 
         return redirect(url_for('task_details', task_id=task.id))
 
-    return render_template('edit_task.html', task=task, statuses=statuses, all_labels=labels)
+    return render_template(
+        'edit_task.html',
+        task=task,
+        statuses=statuses,
+        all_labels=labels,
+        all_tasks=all_tasks,
+        related_tasks=related_tasks
+    )
+
+
+@app.route('/attachment/<int:attachment_id>/delete', methods=['POST'])
+def delete_attachment(attachment_id):
+    attachment = Attachment.query.get_or_404(attachment_id)
+    task_id = attachment.task_id
+    db.session.delete(attachment)
+    db.session.commit()
+    log_task_activity(task_id, 'Удаление вложения', f'Файл "{attachment.filename}" удален')
+    flash("Файл удален", "success")
+    return redirect(url_for('task_details', task_id=task_id))
+
+
+@app.route('/attachment/<int:attachment_id>')
+def download_attachment(attachment_id):
+    attachment = Attachment.query.get_or_404(attachment_id)
+    return send_file(
+        io.BytesIO(attachment.data),
+        as_attachment=True,
+        download_name=attachment.filename
+    )
+
+
+@app.route('/task/<int:task_id>/upload', methods=['POST'])
+def upload_attachment(task_id):
+    task = Task.query.get_or_404(task_id)
+
+    if 'file' not in request.files:
+        flash("Файл не выбран", "danger")
+        return redirect(url_for('task_details', task_id=task_id))
+
+    file = request.files['file']
+    if file.filename == '':
+        flash("Файл не выбран", "danger")
+        return redirect(url_for('task_details', task_id=task_id))
+
+    if file:
+        filename = secure_filename(file.filename)
+        data = file.read()
+
+        attachment = Attachment(
+            filename=filename,
+            data=data,
+            content_type=file.content_type,
+            task_id=task.id
+        )
+        db.session.add(attachment)
+        db.session.commit()
+
+        log_task_activity(task.id, 'Добавление вложения', f'Файл "{filename}" загружен')
+        flash("Файл успешно загружен", "success")
+
+    return redirect(url_for('task_details', task_id=task_id))
 
 
 @app.route('/api/tasks/<int:task_id>/status', methods=['PUT'])
 def api_update_status(task_id):
     data = request.get_json()
     status_id = data.get('status_id')
-
     task = Task.query.get_or_404(task_id)
     target_status = Status.query.get_or_404(status_id)
-
     old_status_name = task.status.name
     new_status_name = target_status.name
-
-    # Удаляем старую метку статуса
     old_status_labels = [label.id for label in Label.query.join(Status).filter(Label.id == Status.label_id)]
     task.labels = [label for label in task.labels if label.id not in old_status_labels]
-
-    # Добавляем новую метку статуса
     new_label = Label.query.get(target_status.label_id)
     if new_label and new_label not in task.labels:
         task.labels.append(new_label)
-
-    # Обновляем статус
     task.status_id = target_status.id
     db.session.commit()
-
-    # Логируем изменение статуса
     log_task_activity(
         task_id,
-        'status_changed',
+        'Изменение статуса',
         f'Статус изменён с "{old_status_name}" на "{new_status_name}"'
     )
-
     return jsonify({
         'id': task.id,
         'title': task.title,
@@ -283,13 +410,11 @@ def add_label():
         name = request.form.get('name')
         color = request.form.get('color', '#888888')
         description = request.form.get('description')
-
         if name and not Label.query.filter_by(name=name).first():
             new_label = Label(name=name, description=description, color=color)
             db.session.add(new_label)
             db.session.commit()
             return redirect(url_for('list_labels'))
-
     return render_template('add_label.html')
 
 
@@ -302,7 +427,6 @@ def edit_label(label_id):
         label.color = request.form.get('color', label.color)
         db.session.commit()
         return redirect(url_for('list_labels'))
-
     return render_template('edit_label.html', label=label)
 
 
@@ -314,21 +438,5 @@ def delete_label(label_id):
     return redirect(url_for('list_labels'))
 
 
-# --- Запуск приложения ---
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-
-        # Добавляем дефолтные статусы, если их нет
-        if Status.query.count() == 0:
-            default_statuses = [
-                Status(name="Open", label_id=1),
-                Status(name="Doing", label_id=2),
-                Status(name="To Test", label_id=3),
-                Status(name="Testing", label_id=4),
-                Status(name="Closed", label_id=5)
-            ]
-            db.session.add_all(default_statuses)
-            db.session.commit()
-
     app.run(debug=True)
