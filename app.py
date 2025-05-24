@@ -11,7 +11,6 @@ ENV = os.getenv("FLASK_ENV", "auto")
 if ENV == "auto":
     try:
         import pymysql
-
         mysql_available = True
     except ImportError:
         mysql_available = False
@@ -38,13 +37,13 @@ db = SQLAlchemy(app)
 
 # --- Модели ---
 
-
 class Status(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
+    label_id = db.Column(db.Integer, db.ForeignKey('label.id'), nullable=False)
 
 
-# Таблица связи многие-ко-многим
+# Таблицы связи многие-ко-многим
 task_label = db.Table('task_label',
                       db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
                       db.Column('label_id', db.Integer, db.ForeignKey('label.id'), primary_key=True)
@@ -63,24 +62,17 @@ class Task(db.Model):
     status_id = db.Column(db.Integer, db.ForeignKey('status.id'), nullable=False)
     status = db.relationship('Status', backref='tasks')
     task_order = db.Column(db.Integer, default=0)
-    labels = db.relationship('Label', secondary=task_label, backref='tasks')
-
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     weight = db.Column(db.Integer)
     due_date = db.Column(db.Date)
     confidentiality = db.Column(db.String(50))
 
-    activities = db.relationship('Activity', backref='task', lazy='dynamic')
+    # Связанные метки
+    labels = db.relationship('Label', secondary=task_label, backref='tasks')
 
-    # Связанные задачи (many-to-many)
-    linked_tasks = db.relationship(
-        'Task',
-        secondary=task_link,
-        primaryjoin=(task_link.c.task_id == id),
-        secondaryjoin=(task_link.c.linked_task_id == id),
-        backref='tasks'
-    )
+    # Связь с активностью
+    activities = db.relationship('Activity', backref='task', lazy='dynamic')
 
 
 class Label(db.Model):
@@ -93,8 +85,19 @@ class Label(db.Model):
 class Activity(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=False)
-    message = db.Column(db.Text, nullable=False)
+    action_type = db.Column(db.String(50), nullable=True)  # тип действия: created, status_changed и т.д.
+    description = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+def log_task_activity(task_id, action_type, description):
+    activity = Activity(
+        task_id=task_id,
+        action_type=action_type,
+        description=description
+    )
+    db.session.add(activity)
+    db.session.commit()
 
 
 # --- Роуты ---
@@ -113,18 +116,18 @@ def board():
     for status in statuses:
         task_counts[status.id] = Task.query.filter_by(status_id=status.id).count()
 
-    return render_template('board.html', tasks=tasks, statuses=statuses, task_counts=task_counts)
+    return render_template('board.html', tasks=tasks, statuses=statuses, task_counts=task_counts, active_page='board')
 
 
 @app.route('/tasks')
-def list_tasks():
-    tasks = Task.query.all()
-    return render_template('tasks.html', tasks=tasks)
+def tasks():
+    all_tasks = Task.query.all()
+    return render_template('tasks.html', tasks=all_tasks, active_page='tasks')
 
 
 @app.route('/wiki')
 def wiki():
-    return render_template('wiki.html')
+    return render_template('wiki.html', active_page='wiki')
 
 
 @app.route('/task/add', methods=['GET', 'POST'])
@@ -141,7 +144,6 @@ def add_task():
 
         new_task = Task(title=title, description=description, status_id=status_id)
 
-        # Привязываем метки
         label_ids = request.form.getlist('label_ids')
         if label_ids:
             selected_labels = Label.query.filter(Label.id.in_(label_ids)).all()
@@ -149,6 +151,12 @@ def add_task():
 
         db.session.add(new_task)
         db.session.commit()
+
+        log_task_activity(
+            new_task.id,
+            'created',
+            f'Задача "{new_task.title}" создана'
+        )
 
         return redirect(url_for('board'))
 
@@ -167,15 +175,47 @@ def edit_task(task_id):
     statuses = Status.query.all()
     labels = Label.query.all()
 
-    if request.method == 'POST':
-        task.title = request.form.get('title')
-        task.description = request.form.get('description')
-        task.status_id = request.form.get('status_id')
+    old_title = task.title
+    old_description = task.description
+    old_status_name = task.status.name if task.status else '—'
 
-        label_ids = request.form.getlist('label_ids')
-        task.labels = Label.query.filter(Label.id.in_(label_ids)).all()
+    if request.method == 'POST':
+        new_title = request.form.get('title')
+        new_description = request.form.get('description')
+        new_status_id = int(request.form.get('status_id') or task.status_id)
+
+        # Обновляем поля
+        task.title = new_title
+        task.description = new_description
+        task.status_id = new_status_id
+
+        # Обновляем метки
+        label_ids = list(map(int, request.form.getlist('label_ids')))
+        old_labels = [lb.name for lb in task.labels]
+        new_labels = Label.query.filter(Label.id.in_(label_ids)).all()
+        task.labels = new_labels
+
+        added_labels = set(lb.name for lb in new_labels) - set(old_labels)
+        removed_labels = set(old_labels) - set(lb.name for lb in new_labels)
 
         db.session.commit()
+
+        # Логируем изменения
+        if old_title != new_title:
+            log_task_activity(task.id, 'title_updated', f'Название изменено с "{old_title}" на "{new_title}"')
+
+        if old_description != new_description:
+            log_task_activity(task.id, 'description_updated', 'Описание изменено')
+
+        if task.status.name != old_status_name:
+            log_task_activity(task.id, 'status_updated', f'Статус изменён на "{task.status.name}"')
+
+        for label in added_labels:
+            log_task_activity(task.id, 'label_added', f'Метка "{label}" добавлена')
+
+        for label in removed_labels:
+            log_task_activity(task.id, 'label_removed', f'Метка "{label}" удалена')
+
         return redirect(url_for('task_details', task_id=task.id))
 
     return render_template('edit_task.html', task=task, statuses=statuses, all_labels=labels)
@@ -189,21 +229,35 @@ def api_update_status(task_id):
     task = Task.query.get_or_404(task_id)
     target_status = Status.query.get_or_404(status_id)
 
+    old_status_name = task.status.name
+    new_status_name = target_status.name
+
+    # Удаляем старую метку статуса
+    old_status_labels = [label.id for label in Label.query.join(Status).filter(Label.id == Status.label_id)]
+    task.labels = [label for label in task.labels if label.id not in old_status_labels]
+
+    # Добавляем новую метку статуса
+    new_label = Label.query.get(target_status.label_id)
+    if new_label and new_label not in task.labels:
+        task.labels.append(new_label)
+
+    # Обновляем статус
     task.status_id = target_status.id
     db.session.commit()
 
-    new_tasks = Task.query.filter_by(status_id=status_id).order_by(Task.task_order.asc()).all()
-    for i, t in enumerate(new_tasks):
-        t.task_order = i
-    db.session.commit()
+    # Логируем изменение статуса
+    log_task_activity(
+        task_id,
+        'status_changed',
+        f'Статус изменён с "{old_status_name}" на "{new_status_name}"'
+    )
 
-    task_data = {
+    return jsonify({
         'id': task.id,
         'title': task.title,
+        'url': url_for('task_details', task_id=task.id, _external=True),
         'labels': [{'name': lb.name, 'color': lb.color} for lb in task.labels]
-    }
-
-    return jsonify(task_data)
+    })
 
 
 @app.route('/api/order', methods=['POST'])
@@ -217,42 +271,31 @@ def api_update_order():
     return '', 204
 
 
-@app.route('/status/add', methods=['GET', 'POST'])
-def add_status():
-    if request.method == 'POST':
-        name = request.form.get('name')
-        if name and not Status.query.filter_by(name=name).first():
-            db.session.add(Status(name=name))
-            db.session.commit()
-        return redirect(url_for('board'))
-
-    return render_template('add_status.html')
-
-
 @app.route('/labels')
 def list_labels():
     labels = Label.query.all()
-    return render_template('labels.html', labels=labels)
+    return render_template('labels.html', labels=labels, active_page='labels')
 
 
-@app.route('/label/add', methods=['POST'])
+@app.route('/label/add', methods=['GET', 'POST'])
 def add_label():
-    name = request.form.get('name')
-    description = request.form.get('description')
-    color = request.form.get('color', '#888888')
+    if request.method == 'POST':
+        name = request.form.get('name')
+        color = request.form.get('color', '#888888')
+        description = request.form.get('description')
 
-    if name and not Label.query.filter_by(name=name).first():
-        new_label = Label(name=name, description=description, color=color)
-        db.session.add(new_label)
-        db.session.commit()
+        if name and not Label.query.filter_by(name=name).first():
+            new_label = Label(name=name, description=description, color=color)
+            db.session.add(new_label)
+            db.session.commit()
+            return redirect(url_for('list_labels'))
 
-    return redirect(url_for('list_labels'))
+    return render_template('add_label.html')
 
 
 @app.route('/label/<int:label_id>/edit', methods=['GET', 'POST'])
 def edit_label(label_id):
     label = Label.query.get_or_404(label_id)
-
     if request.method == 'POST':
         label.name = request.form.get('name')
         label.description = request.form.get('description')
@@ -279,11 +322,11 @@ if __name__ == '__main__':
         # Добавляем дефолтные статусы, если их нет
         if Status.query.count() == 0:
             default_statuses = [
-                Status(name="Open"),
-                Status(name="Doing"),
-                Status(name="To Test"),
-                Status(name="Testing"),
-                Status(name="Closed")
+                Status(name="Open", label_id=1),
+                Status(name="Doing", label_id=2),
+                Status(name="To Test", label_id=3),
+                Status(name="Testing", label_id=4),
+                Status(name="Closed", label_id=5)
             ]
             db.session.add_all(default_statuses)
             db.session.commit()
