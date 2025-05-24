@@ -5,14 +5,11 @@
 {% block content %}
 <h2 class="mb-4">📋 Доска задач</h2>
 
-<!-- Кнопки действий -->
 <div class="mb-3">
     <a href="/task/add" class="btn btn-success me-2">+ Новая задача</a>
 </div>
 
-<!-- Обёртка для горизонтальной прокрутки -->
 <div class="board-scroll-wrapper">
-    <!-- Контейнер с колонками -->
     <div class="board-container">
         {% for status in statuses %}
             <div class="column-wrapper"
@@ -40,7 +37,6 @@
                                         </button>
                                     </div>
 
-                                    <!-- Отображение меток -->
                                     <div class="mt-1">
                                         {% for label in task.labels %}
                                             <span class="badge rounded-pill me-1" style="background-color: {{ label.color }}; color: black;">
@@ -71,7 +67,6 @@ function drag(event) {
     };
     event.dataTransfer.setData("application/json", JSON.stringify(data));
 
-    // Создаем индикатор позиции дропа
     if (!dropZone) {
         dropZone = document.createElement('div');
         dropZone.className = 'drop-zone';

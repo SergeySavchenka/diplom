@@ -6,11 +6,9 @@
 <div class="p-4">
     <h2 class="mb-4">🧩 Список задач</h2>
 
-    <!-- Таблица -->
     <table class="table table-hover align-middle" id="tasksTable">
         <thead class="table-light">
             <tr>
-                <!-- ID -->
                 <th scope="col">
                     ID
                     <div class="d-flex justify-content-between align-items-center">
@@ -19,7 +17,6 @@
                     </div>
                 </th>
 
-                <!-- Наименование -->
                 <th scope="col">
                     Наименование
                     <div class="d-flex justify-content-between align-items-center">
@@ -28,7 +25,6 @@
                     </div>
                 </th>
 
-                <!-- Дата создания -->
                 <th scope="col">
                     Дата создания
                     <div class="d-flex justify-content-between align-items-center">
@@ -37,7 +33,6 @@
                     </div>
                 </th>
 
-                <!-- Статус -->
                 <th scope="col">
                     Статус
                     <div class="d-flex justify-content-between align-items-center">
@@ -46,7 +41,6 @@
                     </div>
                 </th>
 
-                <!-- Лейблы -->
                 <th scope="col">
                     Лейблы
                     <div class="d-flex justify-content-between align-items-center">
@@ -55,7 +49,6 @@
                     </div>
                 </th>
 
-                <!-- Вес -->
                 <th scope="col">
                     Вес
                     <div class="d-flex justify-content-between align-items-center">
@@ -64,7 +57,6 @@
                     </div>
                 </th>
 
-                <!-- Дата изменения -->
                 <th scope="col">
                     Дата изменения
                     <div class="d-flex justify-content-between align-items-center">
@@ -131,7 +123,6 @@
     </div>
 </div>
 
-<!-- JS для динамического поиска и сортировки -->
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const searchInputs = document.querySelectorAll("#tasksTable thead input");
@@ -139,7 +130,6 @@ document.addEventListener("DOMContentLoaded", function () {
     let currentSortedColumn = null;
     let currentOrder = null;
 
-    // Функция сортировки
     function sortTable(columnIndex, order) {
         const tbody = document.querySelector("#tasksTable tbody");
         const rows = Array.from(document.querySelectorAll("#tasksTable tbody tr"));
@@ -148,12 +138,10 @@ document.addEventListener("DOMContentLoaded", function () {
             let cellA = a.cells[columnIndex].innerText.trim().toLowerCase();
             let cellB = b.cells[columnIndex].innerText.trim().toLowerCase();
 
-            // Числа
             if (!isNaN(cellA) && !isNaN(cellB)) {
                 return order === "asc" ? cellA - cellB : cellB - cellA;
             }
 
-            // Даты dd.mm.yyyy
             const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
             if (dateRegex.test(cellA) && dateRegex.test(cellB)) {
                 const dateA = new Date(cellA.split('.').reverse().join('-'));
@@ -161,23 +149,19 @@ document.addEventListener("DOMContentLoaded", function () {
                 return order === "asc" ? dateA - dateB : dateB - dateA;
             }
 
-            // Строки
             return order === "asc" ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
         });
 
-        // Перемещаем отсортированные строки
         tbody.innerHTML = "";
         rows.forEach(row => tbody.appendChild(row));
     }
 
-    // Обработчик клика по иконкам сортировки
     sortableHeaders.forEach(icon => {
         icon.addEventListener("click", function () {
             const columnIndex = parseInt(this.getAttribute("data-column"));
             const currentIcon = this;
 
             if (currentSortedColumn !== null && currentSortedColumn !== columnIndex) {
-                // Сброс предыдущего состояния
                 const prevIcon = document.querySelector(`.sort-icon[data-column='${currentSortedColumn}']`);
                 if (prevIcon) {
                     prevIcon.classList.remove("bi-arrow-up", "bi-arrow-down");
@@ -187,7 +171,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
             let newOrder;
             if (currentSortedColumn === columnIndex) {
-                // Переключаем направление или сбрасываем
                 if (currentOrder === "asc") {
                     newOrder = "desc";
                     currentIcon.classList.remove("bi-filter-left", "bi-arrow-up");
@@ -213,7 +196,6 @@ document.addEventListener("DOMContentLoaded", function () {
             if (newOrder !== null) {
                 sortTable(columnIndex, newOrder);
             } else {
-                // Сброс до исходного порядка
                 const tbody = document.querySelector("#tasksTable tbody");
                 const rows = Array.from(document.querySelectorAll("#tasksTable tbody tr")).sort(
                     (a, b) => a.dataset.originalIndex - b.dataset.originalIndex
@@ -224,12 +206,10 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // Сохраняем оригинальные индексы строк
     document.querySelectorAll("#tasksTable tbody tr").forEach((row, index) => {
         row.dataset.originalIndex = index;
     });
 
-    // Функция фильтрации
     function applyFilters() {
         const rows = document.querySelectorAll("#tasksTable tbody tr");
         const filters = Array.from(searchInputs).map(input => ({
@@ -251,7 +231,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // Обработчики для полей поиска
     searchInputs.forEach(input => {
         input.addEventListener("input", function () {
             applyFilters();
@@ -262,25 +241,24 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 <style>
-    /* Улучшение стиля таблицы */
 #tasksTable {
-    border-collapse: collapse; /* Объединяем границы ячеек */
+    border-collapse: collapse;
 }
 
 #tasksTable th,
 #tasksTable td {
-    border: 1px solid #dee2e6; /* Границы между ячейками */
-    padding: 0.5rem; /* Паддинг внутри ячеек */
-    vertical-align: middle; /* Выравнивание по центру */
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
+    vertical-align: middle;
 }
 
 #tasksTable thead th {
-    background-color: #f8f9fa; /* Тёмный фон заголовков */
-    font-weight: bold; /* Жирный шрифт для заголовков */
+    background-color: #f8f9fa;
+    font-weight: bold;
 }
 
 #tasksTable tbody tr:hover {
-    background-color: #e9ecef; /* Подсветка строки при наведении */
+    background-color: #e9ecef;
 }
 </style>
 {% endblock %}

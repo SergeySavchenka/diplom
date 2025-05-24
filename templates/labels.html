@@ -4,17 +4,14 @@
 <div class="p-4">
     <h2 class="mb-4">🔖 Управление метками</h2>
 
-    <!-- Кнопка добавления -->
     <div class="mb-3">
         <a href="/label/add" class="btn btn-success">+ Новая метка</a>
     </div>
 
-    <!-- Форма поиска -->
     <div class="mb-4">
         <input type="text" id="searchInput" class="form-control" placeholder="Поиск по названию метки">
     </div>
 
-    <!-- Список меток -->
     <div class="row row-cols-1 row-cols-sm-2 row-cols-md-4 g-3" id="labelsContainer">
         {% for label in labels %}
             <div class="col label-card" data-label-name="{{ label.name }}">
@@ -36,7 +33,6 @@
     </div>
 </div>
 
-<!-- JS для поиска по меткам -->
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const searchInput = document.getElementById("searchInput");

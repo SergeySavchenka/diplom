@@ -20,7 +20,6 @@
     <button type="submit" class="btn btn-success">Сохранить изменения</button>
 </form>
 
-<!-- Кнопка удаления -->
 <form action="{{ url_for('delete_label', label_id=label.id) }}" method="POST" onsubmit="return confirm('Вы уверены, что хотите удалить эту метку?');">
     <button type="submit" class="btn btn-danger mt-3">❌ Удалить метку</button>
 </form>
