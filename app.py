@@ -123,6 +123,7 @@ def add_comment(task_id):
     db.session.commit()
 
     flash("Комментарий добавлен", "success")
+    log_task_activity(new_comment.task_id, 'Добавление комментария', f'Добавлен комментарий')
     return redirect(url_for('task_details', task_id=task_id))
 
 
