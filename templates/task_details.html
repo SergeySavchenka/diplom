@@ -6,10 +6,6 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3 bg-light p-3 rounded shadow-sm">
         <h1 class="h4 mb-0">{{ task.title }}</h1>
-        <a href="{{ url_for('edit_task', task_id=task.id) }}" class="btn btn-sm btn-outline-secondary me-2">Редактировать задачу</a>
-        <button type="button" class="btn btn-sm btn-outline-danger me-2" data-bs-toggle="modal" data-bs-target="#createBugModal">
-            <i class="bi bi-bug"></i> Создать баг-задачу
-        </button>
     </div>
 
     <div class="row">
@@ -165,7 +161,9 @@
                                         <small class="text-muted">
                                             {{ activity.created_at.strftime('%d.%m.%Y') }}
                                         </small>
-                                        <span class="badge bg-{{ 'success' if activity.action_type == 'created' else 'primary' if 'status' in activity.action_type else 'warning' if 'label' in activity.action_type else 'info' }}">
+                                        <span class="badge bg-{{ 'success' if activity.action_type == 'Создание' else 'primary' if 'Изменение статуса' in activity.action_type
+                                                        else 'warning' if 'Добавление метки' in activity.action_type else 'warning'  if 'Удаление метки' in activity.action_type
+                                                        else 'info' }}">
                                             {{ activity.action_type|capitalize }}
                                         </span>
                                     </div>
@@ -188,6 +186,8 @@
                                             <i class="bi bi-trash text-danger me-2"></i>
                                         {% elif 'Добавление метки' in activity.action_type %}
                                             <i class="bi bi-tag-fill text-warning me-2"></i>
+                                        {% elif 'Добавление комментария' in activity.action_type %}
+                                            <i class="bi bi-tag-fill text-warning me-2"></i>
                                         {% elif 'Удаление метки' in activity.action_type %}
                                             <i class="bi bi-tag me-2"></i>
                                         {% else %}
@@ -207,6 +207,16 @@
 
         <div class="col-md-3">
             <aside class="right-sidebar border-start ps-3 pe-3 pt-2 pb-2">
+
+                <div class="card mb-3 border-0 shadow-sm">
+                    <div class="card-body p-2 text-center">
+                        <a href="{{ url_for('edit_task', task_id=task.id) }}" class="btn btn-sm btn-outline-secondary w-100 mb-2">Редактировать задачу</a>
+                        <button type="button" class="btn btn-sm btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#createBugModal">
+                            <i class="bi bi-bug"></i> Создать баг-задачу
+                        </button>
+                    </div>
+                </div>
+
                 <form action="" method="POST">
 
                     <div class="card mb-3 border-0">
@@ -264,6 +274,7 @@
                     </div>
 
                 </form>
+
             </aside>
         </div>
     </div>
