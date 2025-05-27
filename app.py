@@ -8,7 +8,8 @@ import io
 
 from models import db, Task, Label, Status, Comment, Attachment, task_link, log_task_activity
 
-load_dotenv(dotenv_path="example_configs/.env.local")
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, 'configs', '.env.kanban_connect'))
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
