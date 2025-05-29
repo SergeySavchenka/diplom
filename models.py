@@ -15,6 +15,18 @@ task_link = db.Table('task_link',
     db.Column('linked_task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True)
 )
 
+# Таблица связи "назначенный"
+task_assigned = db.Table('task_assigned',
+    db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('user.user_id'), primary_key=True)
+)
+
+# Таблица связи "участники задачи"
+task_participant = db.Table('task_participant',
+    db.Column('task_id', db.Integer, db.ForeignKey('task.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('user.user_id'), primary_key=True)
+)
+
 
 class Status(db.Model):
     __tablename__ = 'status'
@@ -29,6 +41,12 @@ class Label(db.Model):
     name = db.Column(db.String(50), unique=True, nullable=False)
     description = db.Column(db.Text, nullable=True)
     color = db.Column(db.String(20), default="#888888")
+
+
+class User(db.Model):
+    __tablename__ = 'user'
+    user_id = db.Column(db.Integer, primary_key=True)
+    nickname = db.Column(db.String(64), nullable=False)
 
 
 class Task(db.Model):
@@ -49,7 +67,14 @@ class Task(db.Model):
     labels = db.relationship('Label', secondary=task_label, backref='tasks')
     activities = db.relationship('Activity', backref='task', lazy='dynamic')
 
-    related_tasks = db.relationship(
+    # Назначенный пользователь
+    assigned_users = db.relationship('User', secondary=task_assigned, backref=db.backref('assigned_tasks', lazy='dynamic'))
+
+    # Участники задачи
+    participants = db.relationship('User', secondary=task_participant, backref=db.backref('participated_tasks', lazy='dynamic'))
+
+    # Связанные задачи
+    linked_tasks = db.relationship(
         'Task',
         secondary=task_link,
         primaryjoin=id == task_link.c.task_id,
@@ -62,12 +87,13 @@ class Activity(db.Model):
     __tablename__ = 'activity'
     id = db.Column(db.Integer, primary_key=True)
     task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=False)
-    action_type = db.Column(db.String(50), nullable=True)
+    action_type = db.Column(db.String(50))
     description = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class Comment(db.Model):
+    __tablename__ = 'comment'
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
     task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=False)
@@ -77,6 +103,7 @@ class Comment(db.Model):
 
 
 class Attachment(db.Model):
+    __tablename__ = 'attachment'
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
     data = db.Column(db.LargeBinary(length=(1 << 24)), nullable=False)
@@ -85,6 +112,7 @@ class Attachment(db.Model):
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     task = db.relationship('Task', backref=db.backref('attachments', lazy='dynamic'))
+
 
 def log_task_activity(task_id, action_type, description):
     activity = Activity(
