@@ -83,7 +83,7 @@
                     <form action="{{ url_for('add_task_link', task_id=task.id) }}" method="POST">
                         <input type="hidden" name="return_to" value="task_details">
                         <div class="mb-2">
-                            <label for="linked_task_id" class="form-label">Выберите задачу для связи:</label>
+                            <label for="linked_task_id" class="form-label">Выберите задачу:</label>
                             <select name="linked_task_id" id="linked_task_id" class="form-select form-select-sm" required>
                                 {% for other_task in all_tasks if other_task.id != task.id %}
                                     <option value="{{ other_task.id }}">#{{ other_task.id }} — {{ other_task.title }}</option>
@@ -161,15 +161,23 @@
                                         <small class="text-muted">
                                             {{ activity.created_at.strftime('%d.%m.%Y') }}
                                         </small>
-                                        <span class="badge bg-{{ 'success' if activity.action_type == 'Создание' else 'primary' if 'Изменение статуса' in activity.action_type
-                                                        else 'warning' if 'Добавление метки' in activity.action_type else 'warning'  if 'Удаление метки' in activity.action_type
+                                        <span class="badge rounded-pill bg-{{ 'success' if activity.action_type == 'Создание'
+                                                        else 'secondary' if 'Добавление вложения' in activity.action_type
+                                                        else 'secondary' if 'Удаление вложения' in activity.action_type
+                                                        else 'secondary' if 'Добавление комментария' in activity.action_type
+                                                        else 'secondary' if 'Удаление комментария' in activity.action_type
+                                                        else 'dark' if 'Добавление связи' in activity.action_type
+                                                        else 'dark' if 'Удаление связи' in activity.action_type
+                                                        else 'primary' if 'Изменение статуса' in activity.action_type
+                                                        else 'warning' if 'Добавление метки' in activity.action_type
+                                                        else 'warning'  if 'Удаление метки' in activity.action_type
                                                         else 'info' }}">
                                             {{ activity.action_type|capitalize }}
                                         </span>
                                     </div>
                                     <p class="mb-0 text-dark">
                                         {% if 'Изменение статуса' in activity.action_type %}
-                                            <i class="bi bi-arrow-repeat text-primary me-2"></i>
+                                            <i class="bi bi-arrow-repeat text-warning me-2 mt-1"></i>
                                         {% elif 'Создание' in activity.action_type %}
                                             <i class="bi bi-plus-circle-fill text-success me-2"></i>
                                         {% elif 'Изменение описание' in activity.action_type %}
@@ -185,13 +193,23 @@
                                         {% elif 'Удаление вложения' in activity.action_type %}
                                             <i class="bi bi-trash text-danger me-2"></i>
                                         {% elif 'Добавление метки' in activity.action_type %}
-                                            <i class="bi bi-tag-fill text-warning me-2"></i>
+                                            <i class="bi bi-tags-fill text-info me-2 mt-1"></i>
                                         {% elif 'Добавление комментария' in activity.action_type %}
-                                            <i class="bi bi-tag-fill text-warning me-2"></i>
+                                            <i class="bi bi-chat-left-text-fill text-secondary me-2 mt-1"></i>
                                         {% elif 'Удаление метки' in activity.action_type %}
                                             <i class="bi bi-tag me-2"></i>
+                                        {% elif 'Добавление назначенного' in activity.action_type %}
+                                            <i class="bi bi-person-add text-success me-2 mt-1"></i>
+                                        {% elif 'Изменение назначенного' in activity.action_type %}
+                                            <i class="bi bi-person-check-fill text-success me-2 mt-1"></i>
+                                        {% elif 'Удаление назначенного' in activity.action_type %}
+                                            <i class="bi bi-person-dash text-success me-2 mt-1"></i>
+                                        {% elif 'Добавление связи' in activity.action_type %}
+                                            <i class="bi bi-link text-success me-2 mt-1"></i>
+                                        {% elif 'Удаление связи' in activity.action_type %}
+                                            <i class="bi bi-x-circle text-danger me-2 mt-1"></i>
                                         {% else %}
-                                            <i class="bi bi-info-circle me-2"></i>
+                                            <i class="bi bi-info-circle-fill text-muted me-2 mt-1"></i>
                                         {% endif %}
                                         {{ activity.description }}
                                     </p>
@@ -219,10 +237,16 @@
 
                 <form action="" method="POST">
 
-                    <div class="card mb-3 border-0">
-                        <div class="card-body p-3">
+                    <div class="card mb-3 border-0 shadow-sm">
+                        <div class="card-body p-2">
                             <h6 class="fw-bold"><i class="bi bi-person-fill me-2"></i>Назначенный</h6>
-                            <p class="text-muted mb-0">{{ task.assignee or 'Не назначен' }}</p>
+                            {% if task.assigned_users %}
+                                {% for user in task.assigned_users %}
+                                    <p class="mb-0">{{ user.nickname }}</p>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted mb-0">Не назначен</p>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -246,7 +270,7 @@
                     <div class="card mb-3 border-0">
                         <div class="card-body p-3">
                             <h6 class="fw-bold"><i class="bi bi-hash me-2"></i>Вес</h6>
-                            <p class="text-muted mb-0">{{ task.weight if task.weight else 'Не указано' }}</p>
+                            <p class="text-muted mb-0">{{ task.weight if task.weight else 'Нет' }}</p>
                         </div>
                     </div>
 
@@ -254,7 +278,7 @@
                         <div class="card-body p-3">
                             <h6 class="fw-bold"><i class="bi bi-calendar-event me-2"></i>Дата выполнения</h6>
                             <p class="text-muted mb-0">
-                                {{ task.due_date.strftime('%d.%m.%Y') if task.due_date else 'Не указана' }}
+                                {{ task.due_date.strftime('%d.%m.%Y') if task.due_date else 'Нет' }}
                             </p>
                         </div>
                     </div>
@@ -266,10 +290,18 @@
                         </div>
                     </div>
 
-                    <div class="card mb-3 border-0">
-                        <div class="card-body p-3">
+                    <div class="card mb-3 border-0 shadow-sm">
+                        <div class="card-body p-2">
                             <h6 class="fw-bold"><i class="bi bi-people me-2"></i>Участники</h6>
-                            <p class="text-muted mb-0">{{ task.participants_count or '0' }} участников</p>
+                            {% if task.participants %}
+                                <ul class="list-unstyled mb-0">
+                                    {% for participant in task.participants %}
+                                        <li>{{ participant.nickname }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-muted mb-0">Нет участников</p>
+                            {% endif %}
                         </div>
                     </div>
 

@@ -32,17 +32,15 @@
                             <ul class="list-group list-group-flush">
                                 {% for related in related_tasks %}
                                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        <a href="{{ url_for('task_details', task_id=related.id) }}" class="text-decoration-none">
+                                        <a href="{{ url_for('edit_task', task_id=related.id) }}" class="text-decoration-none">
                                             #{{ related.id }} {{ related.title }}
                                         </a>
                                         <div class="d-flex align-items-center">
                                             <span class="badge bg-primary rounded-pill me-2">{{ related.status.name }}</span>
-                                            <form action="{{ url_for('delete_task_link', task_id=task.id, linked_task_id=related.id) }}" method="POST" onsubmit="return confirm('Удалить связь?')">
+                                            <a href="#" onclick="deleteLink({{ task.id }}, {{ related.id }})" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-trash"></i>
                                                 <input type="hidden" name="return_to" value="edit_task">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
-                                            </form>
+                                            </a>
                                         </div>
                                     </li>
                                 {% endfor %}
@@ -63,8 +61,8 @@
                             <select name="assignee" class="form-select form-select-sm">
                                 <option value="">Не назначен</option>
                                 {% for user in users %}
-                                    <option value="{{ user.id }}" {% if user.id == task.assignee_id %}selected{% endif %}>
-                                        {{ user.full_name or user.username }}
+                                    <option value="{{ user.user_id }}" {% if task.assigned_users and user.user_id == task.assigned_users[0].user_id %}selected{% endif %}>
+                                        {{ user.nickname }}
                                     </option>
                                 {% endfor %}
                             </select>
@@ -124,7 +122,13 @@
                     <div class="card mb-3 border-0">
                         <div class="card-body p-3">
                             <h6 class="fw-bold"><i class="bi bi-people me-2"></i>Участники</h6>
-                            <p class="text-muted mb-0">{{ task.participants_count or '0' }} участников</p>
+                            <select name="participants" class="form-select form-select-sm" multiple>
+                                {% for user in users %}
+                                    <option value="{{ user.user_id }}" {% if user in task.participants %}selected{% endif %}>
+                                        {{ user.nickname }}
+                                    </option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
 
@@ -146,6 +150,18 @@ document.addEventListener('DOMContentLoaded', function () {
     textarea.style.height = 'auto';
     textarea.style.height = textarea.scrollHeight + 5 + 'px';
 });
+
+function deleteLink(taskId, linkedTaskId) {
+   if (!confirm("Вы уверены, что хотите удалить связь?")) return;
+   fetch(`/task/${taskId}/link/${linkedTaskId}/delete`, {
+       method: 'POST',
+       headers: {
+           'X-Requested-With': 'XMLHttpRequest'
+       }
+   }).then(() => {
+       location.reload(); // Перезагрузка страницы или обновление DOM
+   });
+}
 </script>
 
 <style>
