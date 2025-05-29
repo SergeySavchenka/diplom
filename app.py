@@ -6,7 +6,7 @@ import markdown
 from werkzeug.utils import secure_filename
 import io
 
-from models import db, Task, Label, Status, Comment, Attachment, task_link, log_task_activity
+from models import db, Task, Label, Status, User, Comment, Attachment, task_link, log_task_activity
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, 'configs', '.env.kanban_connect'))
@@ -147,7 +147,7 @@ def task_details(task_id):
 @app.route('/task/<int:task_id>/link/add', methods=['POST'])
 def add_task_link(task_id):
     linked_task_id = request.form.get('linked_task_id')
-    return_to = request.form.get('return_to', 'edit_task')  # <-- Читаем откуда пришли
+    return_to = request.form.get('return_to', 'edit_task')
 
     if not linked_task_id:
         flash("Не выбрана задача для связи", "danger")
@@ -165,6 +165,7 @@ def add_task_link(task_id):
             db.and_(task_link.c.task_id == linked_task_id, task_link.c.linked_task_id == task_id)
         )
     ).first()
+    log_task_activity(task_id, 'Добавление связи', 'Добавлена связанная задача')
 
     if existing:
         flash("Такая связь уже существует", "warning")
@@ -180,8 +181,7 @@ def add_task_link(task_id):
 
 @app.route('/task/<int:task_id>/link/<int:linked_task_id>/delete', methods=['POST'])
 def delete_task_link(task_id, linked_task_id):
-    return_to = request.form.get('return_to', 'task_details')
-
+    return_to = request.form.get('return_to', 'edit_task')
     db.session.execute(
         task_link.delete().where(
             db.or_(
@@ -190,6 +190,7 @@ def delete_task_link(task_id, linked_task_id):
             )
         )
     )
+    log_task_activity(task_id, 'Удаление связи', 'Удалена связанная задача')
     db.session.commit()
 
     flash("Связь удалена", "success")
@@ -240,6 +241,7 @@ def edit_task(task_id):
     statuses = Status.query.all()
     labels = Label.query.all()
     all_tasks = Task.query.all()
+    users = User.query.all()
 
     direct_links = db.session.query(task_link.c.linked_task_id).filter(task_link.c.task_id == task_id).all()
     reverse_links = db.session.query(task_link.c.task_id).filter(task_link.c.linked_task_id == task_id).all()
@@ -254,6 +256,20 @@ def edit_task(task_id):
     if request.method == 'POST':
         new_title = request.form.get('title')
         new_description = request.form.get('description')
+
+        old_assignee = task.assigned_users[0].user_id if task.assigned_users else None
+
+        assignee_id = request.form.get('assignee')
+
+        if assignee_id:
+            assignee = User.query.get(assignee_id)
+            task.assigned_users = [assignee]
+        else:
+            task.assigned_users.clear()
+
+        participant_ids = list(map(int, request.form.getlist('participants')))
+        participants = User.query.filter(User.user_id.in_(participant_ids)).all()
+        task.participants = participants
 
         task.title = new_title
         task.description = new_description
@@ -278,6 +294,13 @@ def edit_task(task_id):
                 flash("Неверный формат даты", "danger")
         else:
             task.due_date = None
+
+        if not assignee_id:
+            log_task_activity(task.id, 'Удаление назначенного', 'Назначенный пользователь удалён')
+        elif not old_assignee:
+            log_task_activity(task.id, 'Добавление назначенного', f'Пользователь назначен')
+        else:
+            log_task_activity(task.id, 'Изменение назначенного', 'Назначенный изменён`')
 
         db.session.commit()
 
@@ -304,7 +327,8 @@ def edit_task(task_id):
         statuses=statuses,
         all_labels=labels,
         all_tasks=all_tasks,
-        related_tasks=related_tasks
+        related_tasks=related_tasks,
+        users=users
     )
 
 
