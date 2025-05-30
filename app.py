@@ -113,7 +113,6 @@ def add_task():
 def add_comment(task_id):
     content = request.form.get('content')
     if not content:
-        flash("Комментарий не может быть пустым", "danger")
         return redirect(url_for('task_details', task_id=task_id))
 
     new_comment = Comment(
@@ -123,7 +122,6 @@ def add_comment(task_id):
     db.session.add(new_comment)
     db.session.commit()
 
-    flash("Комментарий добавлен", "success")
     log_task_activity(new_comment.task_id, 'Добавление комментария', f'Добавлен комментарий')
     return redirect(url_for('task_details', task_id=task_id))
 
@@ -358,12 +356,10 @@ def upload_attachment(task_id):
     task = Task.query.get_or_404(task_id)
 
     if 'file' not in request.files:
-        flash("Файл не выбран", "danger")
         return redirect(url_for('task_details', task_id=task_id))
 
     file = request.files['file']
     if file.filename == '':
-        flash("Файл не выбран", "danger")
         return redirect(url_for('task_details', task_id=task_id))
 
     if file:
@@ -380,7 +376,6 @@ def upload_attachment(task_id):
         db.session.commit()
 
         log_task_activity(task.id, 'Добавление вложения', f'Файл "{filename}" загружен')
-        flash("Файл успешно загружен", "success")
 
     return redirect(url_for('task_details', task_id=task_id))
 
