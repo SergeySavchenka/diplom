@@ -61,6 +61,7 @@ class Task(db.Model):
     weight = db.Column(db.Integer)
     due_date = db.Column(db.Date)
     confidentiality = db.Column(db.String(50))
+    project = db.Column(db.String(50))
 
     # Отношения
     status = db.relationship('Status', backref='tasks')
