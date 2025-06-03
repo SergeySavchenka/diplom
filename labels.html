@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}🔖 Управление метками{% endblock %}
+{% block content %}
+<div class="p-4">
+    <h2 class="mb-4">🔖 Управление метками</h2>
+
+    <div class="mb-3">
+        <a href="/label/add" class="btn btn-success">+ Новая метка</a>
+    </div>
+
+    <div class="mb-4">
+        <input type="text" id="searchInput" class="form-control" placeholder="Поиск по названию метки">
+    </div>
+
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-4 g-3" id="labelsContainer">
+        {% for label in labels %}
+            <div class="col label-card" data-label-name="{{ label.name }}">
+                <div class="card h-100 border-start" style="border-color: {{ label.color }} !important;">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title mb-1">{{ label.name }}</h5>
+                        <p class="card-text text-muted small mb-3" style="flex: 1;">{{ label.description or "Нет описания" }}</p>
+                        <a href="{{ url_for('edit_label', label_id=label.id) }}" class="btn btn-sm btn-outline-primary mt-auto">
+                            ✏️ Редактировать
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const searchInput = document.getElementById("searchInput");
+    const cards = document.querySelectorAll(".label-card");
+
+    searchInput.addEventListener("input", function () {
+        const query = this.value.toLowerCase().trim();
+
+        cards.forEach(card => {
+            const name = card.dataset.labelName.toLowerCase();
+            card.style.display = name.includes(query) ? "block" : "none";
+        });
+    });
+});
+</script>
+
+<style>
+    .card.border-start {
+        border-left-width: 5px !important;
+    }
+</style>
+{% endblock %}

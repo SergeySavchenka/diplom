@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+
+        body {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 240px;
+            background: linear-gradient(145deg, #f1f3f7, #d9dee6);
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            padding: 20px;
+            border-right: 1px solid #ccc;
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            overflow-y: auto;
+            transition: background 0.3s ease;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .sidebar li {
+            margin-bottom: 10px;
+        }
+
+        .sidebar li.dropdown.collapse {
+            transition: height 0.3s ease-in-out;
+        }
+
+        .sidebar li.dropdown.bi-chevron-down {
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar li.dropdown.show > a.bi-chevron-down {
+            transform: rotate(180deg);
+        }
+
+        .sidebar a {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            padding: 10px 12px;
+            border-radius: 8px;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .sidebar a:hover {
+            background: #CBCBCB;
+        }
+
+        .sidebar a.active {
+            background-color: rgba(13, 110, 253, 0.15); /* Bootstrap primary с прозрачностью */
+            color: #0d6efd;
+        }
+
+        .sidebar i.bi {
+            margin-right: 8px;
+            font-size: 1.1rem;
+            color: #0d6efd;
+        }
+
+        .sidebar h5 {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #444;
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+
+        .content {
+            margin-left: 260px;
+            width: 100%;
+            padding: 20px;
+        }
+        .label-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .col-title {
+            min-width: 100px;
+            max-width: 250px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .text-truncate {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sort-icon {
+            font-size: 1rem;
+            color: #696969; /* серый цвет */
+            cursor: pointer;
+        }
+        .sort-icon:hover {
+            color: #000000;
+        }
+
+        .task-description {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #555;
+        }
+
+        .task-description h1, .task-description h2, .task-description h3 {
+            margin-bottom: 0.5em;
+        }
+
+        .task-description code {
+            background-color: #f1f1f1;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .task-description pre {
+            background-color: #f8f8f8;
+            padding: 10px;
+            overflow-x: auto;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+
+    <script>
+        function openTask(taskId) {
+            window.location.href = '/task/' + taskId;
+        }
+
+        window.onload = function () {
+            const titles = document.querySelectorAll('.task-title');
+            titles.forEach(title => {
+                title.addEventListener('click', function (e) {
+                    const taskId = this.getAttribute('data-task-id');
+                    openTask(taskId);
+                });
+            });
+        };
+    </script>
+</head>
+<body>
+
+<div class="sidebar">
+    <h5>Меню</h5>
+    <ul>
+
+        <!-- Список задач -->
+        <li class="dropdown">
+            <a href="#" class="d-flex justify-content-between align-items-center text-decoration-none text-dark" data-bs-toggle="collapse" data-bs-target="#tasksMenu">
+                <span><i class="bi bi-puzzle me-2"></i>Список задач</span>
+                <i class="bi bi-chevron-down"></i>
+            </a>
+            <ul class="collapse list-unstyled ps-3 border-start" id="tasksMenu">
+                <li><a href="/tasks?project=Проект 1" class="text-decoration-none d-block py-1">🧩 Проект 1</a></li>
+                <li><a href="/tasks?project=Проект 2" class="text-decoration-none d-block py-1">🧩 Проект 2</a></li>
+            </ul>
+        </li>
+
+        <!-- Доска -->
+        <li class="dropdown">
+            <a href="#" class="d-flex justify-content-between align-items-center text-decoration-none text-dark" data-bs-toggle="collapse" data-bs-target="#boardMenu">
+                <span><i class="bi bi-kanban me-2"></i>Доска</span>
+                <i class="bi bi-chevron-down"></i>
+            </a>
+            <ul class="collapse list-unstyled ps-3 border-start" id="boardMenu">
+                <li><a href="/board?project=Проект 1" class="text-decoration-none d-block py-1">📝 Проект 1</a></li>
+                <li><a href="/board?project=Проект 2" class="text-decoration-none d-block py-1">📝 Проект 2</a></li>
+            </ul>
+        </li>
+
+        <!-- Вики -->
+        <li class="dropdown">
+            <a href="#" class="d-flex justify-content-between align-items-center text-decoration-none text-dark" data-bs-toggle="collapse" data-bs-target="#wikiMenu">
+                <span><i class="bi bi-book me-2"></i>Вики</span>
+                <i class="bi bi-chevron-down"></i>
+            </a>
+            <ul class="collapse list-unstyled ps-3 border-start" id="wikiMenu">
+                <li><a href="/wiki?project=Проект 1" class="text-decoration-none d-block py-1">📘 Проект 1</a></li>
+                <li><a href="/wiki?project=Проект 2" class="text-decoration-none d-block py-1">📘 Проект 2</a></li>
+            </ul>
+        </li>
+
+        <!-- Метки -->
+        <li><a href="/labels" class="text-decoration-none"><i class="bi bi-tag me-2"></i>Метки</a></li>
+
+    </ul>
+</div>
+
+<div class="content">
+    {% block content %}
+    {% endblock %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipEl) {
+        return new bootstrap.Tooltip(tooltipEl);
+    });
+</script>
+
+</body>
+</html>
