@@ -5,7 +5,6 @@ from markupsafe import Markup
 import markdown
 from werkzeug.utils import secure_filename
 import io
-
 from models import db, Task, Label, Status, User, Comment, Attachment, task_link, log_task_activity
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -16,7 +15,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback_key')
 app.debug = os.getenv('DEBUG', 'False').lower() in ['true', '1']
-
 
 db.init_app(app)
 
@@ -30,37 +28,45 @@ def markdown_filter(text):
 
 @app.route('/')
 def home():
-    return redirect(url_for('board'))
+    return redirect(url_for('board', project='Проект 1'))
 
 
 @app.route('/board')
 def board():
+    project = request.args.get('project', None)
     task_list = Task.query.order_by(Task.task_order.asc()).all()
+    task_list = [task for task in task_list if task.project == project]
     statuses = Status.query.all()
     task_counts = {}
     for status in statuses:
-        task_counts[status.id] = Task.query.filter_by(status_id=status.id).count()
-    return render_template('board.html', tasks=task_list, statuses=statuses, task_counts=task_counts, active_page='board')
+        count = len([task for task in task_list if task.status_id == status.id])
+        task_counts[status.id] = count
+    return render_template('board.html', tasks=task_list, statuses=statuses, task_counts=task_counts,
+                           active_page='board', project=project)
 
 
 @app.route('/tasks')
 def tasks():
-    all_tasks = Task.query.all()
-    return render_template('tasks.html', tasks=all_tasks, active_page='tasks')
+    project = request.args.get('project', None)
+    all_tasks = Task.query.filter_by(project=project).all()
+    return render_template('tasks.html', tasks=all_tasks, active_page='tasks', project=project)
 
 
 @app.route('/wiki')
 def wiki():
-    return render_template('wiki.html', active_page='wiki')
+    project = request.args.get('project', None)
+    return render_template('wiki.html', active_page='wiki', project=project)
 
 
 @app.route('/task/add', methods=['GET', 'POST'])
 def add_task():
     statuses = Status.query.all()
     labels = Label.query.all()
+    users = User.query.all()
+    project = request.args.get('project', None)
 
     if not statuses:
-        return redirect(url_for('board'))
+        return redirect(url_for('board', project=project))
 
     if request.method == 'POST':
         title = request.form.get('title')
@@ -73,7 +79,8 @@ def add_task():
             status_id=status_id,
             weight=None,
             due_date=None,
-            confidentiality=request.form.get('confidentiality')
+            confidentiality=request.form.get('confidentiality'),
+            project=project
         )
 
         weight = request.form.get('weight')
@@ -89,6 +96,9 @@ def add_task():
                 flash("Неверный формат даты", "danger")
                 return render_template('add_task.html', statuses=statuses, all_labels=labels)
 
+        assignee_id = request.form.get('assignee')
+        participant_ids = list(map(int, request.form.getlist('participants')))
+
         label_ids = request.form.getlist('labels')
         if not label_ids:
             label_ids = ['13']
@@ -96,23 +106,30 @@ def add_task():
             selected_labels = Label.query.filter(Label.id.in_(map(int, label_ids))).all()
             new_task.labels.extend(selected_labels)
 
-        assignee_id = request.form.get('assignee')
-        new_task.assignee_id = int(assignee_id) if assignee_id else None
-
         db.session.add(new_task)
+
+        if assignee_id:
+            assignee = User.query.get(assignee_id)
+            new_task.assigned_users.append(assignee)
+
+        participants = User.query.filter(User.user_id.in_(participant_ids)).all()
+        new_task.participants.extend(participants)
+
         db.session.commit()
 
         log_task_activity(new_task.id, 'Создание', f'Задача "{new_task.title}" создана')
 
-        return redirect(url_for('board'))
+        return redirect(url_for('board', project=project))
 
-    return render_template('add_task.html', statuses=statuses, all_labels=Label.query.all())
+    return render_template('add_task.html', statuses=statuses, all_labels=Label.query.all(), users=users,
+                           project=project)
 
 
 @app.route('/task/<int:task_id>/comment', methods=['POST'])
 def add_comment(task_id):
     content = request.form.get('content')
     if not content:
+        flash("Комментарий не может быть пустым", "danger")
         return redirect(url_for('task_details', task_id=task_id))
 
     new_comment = Comment(
@@ -122,6 +139,7 @@ def add_comment(task_id):
     db.session.add(new_comment)
     db.session.commit()
 
+    flash("Комментарий добавлен", "success")
     log_task_activity(new_comment.task_id, 'Добавление комментария', f'Добавлен комментарий')
     return redirect(url_for('task_details', task_id=task_id))
 
@@ -139,7 +157,8 @@ def task_details(task_id):
 
     statuses = Status.query.all()
     return render_template('task_details.html', task=task, related_tasks=related_tasks, all_tasks=all_tasks,
-                           statuses=statuses)
+                           statuses=statuses, project=task.project
+                           )
 
 
 @app.route('/task/<int:task_id>/link/add', methods=['POST'])
@@ -197,12 +216,13 @@ def delete_task_link(task_id, linked_task_id):
 
 @app.route('/task/<int:task_id>/create_bug', methods=['POST'])
 def create_linked_bug_task(task_id):
+    task = Task.query.get_or_404(task_id)
+    project = task.project
+
     title = request.form.get('title')
     description = request.form.get('description')
     label_ids = ['2', '13']
-    print(label_ids, 'aaa')
     status_id = [1]
-    print(status_id)
 
     if not title:
         flash("Задача должна иметь название", "danger")
@@ -211,7 +231,8 @@ def create_linked_bug_task(task_id):
     new_task = Task(
         title=title,
         description=description,
-        status_id=status_id
+        status_id=status_id,
+        project=project
     )
 
     labels = Label.query.filter(Label.id.in_(label_ids)).all()
@@ -252,6 +273,7 @@ def edit_task(task_id):
     old_due_date = task.due_date
 
     if request.method == 'POST':
+        from datetime import datetime
         new_title = request.form.get('title')
         new_description = request.form.get('description')
 
@@ -286,19 +308,19 @@ def edit_task(task_id):
         due_date_str = request.form.get('due_date')
         if due_date_str:
             try:
-                from datetime import datetime
                 task.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
             except ValueError:
                 flash("Неверный формат даты", "danger")
         else:
             task.due_date = None
 
-        if not assignee_id:
+        if not assignee_id and old_assignee:
             log_task_activity(task.id, 'Удаление назначенного', 'Назначенный пользователь удалён')
-        elif not old_assignee:
+        elif old_assignee and assignee_id != old_assignee:
+            log_task_activity(task.id, 'Изменение назначенного', 'Назначенный изменён')
+        elif assignee_id != old_assignee and assignee_id:
             log_task_activity(task.id, 'Добавление назначенного', f'Пользователь назначен')
-        else:
-            log_task_activity(task.id, 'Изменение назначенного', 'Назначенный изменён`')
+        task.updated_at = datetime.now()
 
         db.session.commit()
 
@@ -356,10 +378,12 @@ def upload_attachment(task_id):
     task = Task.query.get_or_404(task_id)
 
     if 'file' not in request.files:
+        flash("Файл не выбран", "danger")
         return redirect(url_for('task_details', task_id=task_id))
 
     file = request.files['file']
     if file.filename == '':
+        flash("Файл не выбран", "danger")
         return redirect(url_for('task_details', task_id=task_id))
 
     if file:
@@ -376,6 +400,7 @@ def upload_attachment(task_id):
         db.session.commit()
 
         log_task_activity(task.id, 'Добавление вложения', f'Файл "{filename}" загружен')
+        flash("Файл успешно загружен", "success")
 
     return redirect(url_for('task_details', task_id=task_id))
 
@@ -422,6 +447,7 @@ def api_update_order():
 @app.route('/labels')
 def list_labels():
     labels = Label.query.all()
+
     return render_template('labels.html', labels=labels, active_page='labels')
 
 
