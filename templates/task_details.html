@@ -239,6 +239,13 @@
 
                     <div class="card mb-3 border-0 shadow-sm">
                         <div class="card-body p-2">
+                            <h6 class="fw-bold"><i class="bi bi-diagram-3 me-2"></i>Проект</h6>
+                            <p class="mb-0">{{ task.project }}</p>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3 border-0 shadow-sm">
+                        <div class="card-body p-2">
                             <h6 class="fw-bold"><i class="bi bi-person-fill me-2"></i>Назначенный</h6>
                             {% if task.assigned_users %}
                                 {% for user in task.assigned_users %}
@@ -329,6 +336,8 @@
 <div class="modal fade" id="createBugModal" tabindex="-1" aria-labelledby="createBugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <form method="POST" action="{{ url_for('create_linked_bug_task', task_id=task.id) }}">
+            <input type="hidden" name="project" value="{{ project }}">
+
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="createBugModalLabel">Создать баг-задачу</h5>
@@ -348,17 +357,6 @@
                     <div class="mb-3 form-check">
                         <input type="checkbox" name="labels" value="2" id="bugLabelCheck" checked disabled class="form-check-input">
                         <label class="form-check-label" for="bugLabelCheck">Метка "Bug"</label>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Статус</label>
-                        <select name="status_id" class="form-select" disabled>
-                            {% for status in statuses %}
-                                {% if status.name == 'Открытые' %}
-                                    <option value="{{ status.id }}" selected>{{ status.name }}</option>
-                                {% endif %}
-                            {% endfor %}
-                        </select>
                     </div>
                 </div>
                 <div class="modal-footer">

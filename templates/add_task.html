@@ -25,9 +25,7 @@
                         <select name="assignee" class="form-select form-select-sm">
                             <option value="">Не назначен</option>
                             {% for user in users %}
-                                <option value="{{ user.id }}" {% if request.form.assignee == user.id|string %}selected{% endif %}>
-                                    {{ user.full_name or user.username }}
-                                </option>
+                                <option value="{{ user.user_id }}">{{ user.nickname }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -77,9 +75,7 @@
                         <h6 class="fw-bold"><i class="bi bi-people me-2"></i>Участники</h6>
                         <select name="participants" class="form-select form-select-sm" multiple>
                             {% for user in users %}
-                                <option value="{{ user.id }}" {% if user.id|string in request.form.getlist('participants') %}selected{% endif %}>
-                                    {{ user.full_name or user.username }}
-                                </option>
+                                <option value="{{ user.user_id }}">{{user.nickname}}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -89,7 +85,7 @@
     </div>
 
     <button type="submit" class="btn btn-success">Добавить задачу</button>
-    <a href="/board" class="btn btn-secondary ms-2">← На доску</a>
+    <a href="/board?project={{project}}" class="btn btn-secondary ms-2">← На доску</a>
 </form>
 
 <style>

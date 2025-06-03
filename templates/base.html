@@ -37,6 +37,18 @@
             margin-bottom: 10px;
         }
 
+        .sidebar li.dropdown.collapse {
+            transition: height 0.3s ease-in-out;
+        }
+
+        .sidebar li.dropdown.bi-chevron-down {
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar li.dropdown.show > a.bi-chevron-down {
+            transform: rotate(180deg);
+        }
+
         .sidebar a {
             display: flex;
             align-items: center;
@@ -150,10 +162,46 @@
 <div class="sidebar">
     <h5>Меню</h5>
     <ul>
-        <li><a href="/tasks" {% if active_page == 'tasks' %}class="active"{% endif %}><i class="bi bi-puzzle"></i> Список задач</a></li>
-        <li><a href="/board" {% if active_page == 'board' %}class="active"{% endif %}><i class="bi bi-kanban"></i> Доска</a></li>
-        <li><a href="/wiki" {% if active_page == 'wiki' %}class="active"{% endif %}><i class="bi bi-book"></i> Вики</a></li>
-        <li><a href="/labels" {% if active_page == 'labels' %}class="active"{% endif %}><i class="bi bi-tag"></i> Метки</a></li>
+
+        <!-- Список задач -->
+        <li class="dropdown">
+            <a href="#" class="d-flex justify-content-between align-items-center text-decoration-none text-dark" data-bs-toggle="collapse" data-bs-target="#tasksMenu">
+                <span><i class="bi bi-puzzle me-2"></i>Список задач</span>
+                <i class="bi bi-chevron-down"></i>
+            </a>
+            <ul class="collapse list-unstyled ps-3 border-start" id="tasksMenu">
+                <li><a href="/tasks?project=Проект 1" class="text-decoration-none d-block py-1">🧩 Проект 1</a></li>
+                <li><a href="/tasks?project=Проект 2" class="text-decoration-none d-block py-1">🧩 Проект 2</a></li>
+            </ul>
+        </li>
+
+        <!-- Доска -->
+        <li class="dropdown">
+            <a href="#" class="d-flex justify-content-between align-items-center text-decoration-none text-dark" data-bs-toggle="collapse" data-bs-target="#boardMenu">
+                <span><i class="bi bi-kanban me-2"></i>Доска</span>
+                <i class="bi bi-chevron-down"></i>
+            </a>
+            <ul class="collapse list-unstyled ps-3 border-start" id="boardMenu">
+                <li><a href="/board?project=Проект 1" class="text-decoration-none d-block py-1">📝 Проект 1</a></li>
+                <li><a href="/board?project=Проект 2" class="text-decoration-none d-block py-1">📝 Проект 2</a></li>
+            </ul>
+        </li>
+
+        <!-- Вики -->
+        <li class="dropdown">
+            <a href="#" class="d-flex justify-content-between align-items-center text-decoration-none text-dark" data-bs-toggle="collapse" data-bs-target="#wikiMenu">
+                <span><i class="bi bi-book me-2"></i>Вики</span>
+                <i class="bi bi-chevron-down"></i>
+            </a>
+            <ul class="collapse list-unstyled ps-3 border-start" id="wikiMenu">
+                <li><a href="/wiki?project=Проект 1" class="text-decoration-none d-block py-1">📘 Проект 1</a></li>
+                <li><a href="/wiki?project=Проект 2" class="text-decoration-none d-block py-1">📘 Проект 2</a></li>
+            </ul>
+        </li>
+
+        <!-- Метки -->
+        <li><a href="/labels" class="text-decoration-none"><i class="bi bi-tag me-2"></i>Метки</a></li>
+
     </ul>
 </div>
 
