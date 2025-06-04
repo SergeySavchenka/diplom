@@ -246,6 +246,8 @@ def create_linked_bug_task(task_id):
 
     db.session.commit()
 
+    log_task_activity(task.id, 'Добавление связи', f'Баг-задача # "{new_task.id}" создана')
+
     log_task_activity(new_task.id, 'Создание', f'Баг-задача "{new_task.title}" создана')
     log_task_activity(new_task.id, 'Добавление метки', 'Метка "Bug" добавлена')
 
